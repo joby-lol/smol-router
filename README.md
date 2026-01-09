@@ -203,6 +203,84 @@ $router->add(
 );
 ```
 
+### TransformerMatcher
+
+Transforms a path before matching it against a child matcher. This is useful for preprocessing paths (e.g., lowercasing for case-insensitive matching, normalizing formats, removing query strings). By default, captures the original untransformed path as `original_path`.
+
+The transformer function can also reject a match by returning `null`.
+
+```php
+// Case-insensitive matching
+$lowercase = new TransformerMatcher(fn(string $p) => strtolower($p));
+$router->add(
+    $lowercase->with(new ExactMatcher('about')),
+    fn(string $original_path) => /* ... */
+);
+// Matches: 'ABOUT', 'About', 'about' → $original_path = original casing
+
+// Remove query strings
+$router->add(
+    new TransformerMatcher(fn(string $p) => explode('?', $p)[0])
+        ->with(new ExactMatcher('search')),
+    fn() => /* ... */
+);
+// Matches: 'search?q=test', 'search?filter=all'
+
+// Custom parameter name for original path
+$router->add(
+    new TransformerMatcher(fn($p) => strtolower($p), 'raw_path')
+        ->with(new PatternMatcher('users/:id')),
+    fn(int $id, string $raw_path) => /* ... */
+);
+// Matches: 'USERS/123' → $id = 123, $raw_path = 'USERS/123'
+
+// Disable capturing original path
+$router->add(
+    new TransformerMatcher(fn($p) => urldecode($p), null)
+        ->with(new PatternMatcher('search/:query')),
+    fn(string $query) => /* ... */
+);
+```
+
+#### Reusable Transformer Patterns
+
+Define a transformer once and compose it with multiple matchers:
+
+```php
+$lowercase = new TransformerMatcher(fn(string $p) => strtolower($p));
+
+$router->add(
+    $lowercase->with(new ExactMatcher('about')),
+    fn() => /* handle about page */
+);
+
+$router->add(
+    $lowercase->with(new ExactMatcher('contact')),
+    fn() => /* handle contact page */
+);
+
+$router->add(
+    $lowercase->with(new PrefixMatcher('api/')),
+    fn(string $prefix_remainder) => /* handle API routes case-insensitively */
+);
+```
+
+#### Transformer Rejection
+
+Transformers can reject matches by returning `null`:
+
+```php
+// Only match paths that start with 'allowed'
+$filtered = new TransformerMatcher(function(string $p) {
+    return str_starts_with($p, 'allowed') ? $p : null;
+});
+
+$router->add(
+    $filtered->with(new PrefixMatcher('allowed')),
+    fn() => /* only paths starting with 'allowed' can match */
+);
+```
+
 ## Parameter Injection
 
 Handler functions automatically receive parameters extracted by matchers, with type conversion. If a type cannot be created from the string form of the parameter an exception will be thrown, and the user will get a 400 error indicating that it was an invalid request.
