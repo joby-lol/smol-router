@@ -1,0 +1,32 @@
+{
+  "name": "joby/smol-router",
+  "description": "A straightforward and unopinionated router for human-scale applications.",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Joby\\Smol\\Router\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Joby\\Smol\\Router\\": "tests/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Joby Elliott",
+      "email": "code@byjoby.com"
+    }
+  ],
+  "require-dev": {
+    "phpunit/phpunit": "^12",
+    "phpstan/phpstan": "^2.1"
+  },
+  "require": {
+    "php": ">=8.4",
+    "joby/smol-request": "dev-main",
+    "joby/smol-response": "dev-main",
+    "joby/smol-url": "@beta"
+  }
+}
