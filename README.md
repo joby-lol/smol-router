@@ -1,4 +1,4 @@
-# smol-router
+# smolRouter
 
 A lightweight PHP router with flexible matching strategies and automatic parameter injection.
 
