@@ -29,11 +29,11 @@ use Joby\Smol\Router\MatcherInterface;
  * - Composed: $lower = new TransformerMatcher(fn($p) => strtolower($p));
  *   $router->add($lower->with(new ExactMatcher('about')), ...);
  */
-readonly class TransformerMatcher implements MatcherInterface
+class TransformerMatcher implements MatcherInterface
 {
 
     /** @var Closure(string):(string|null) the transformation method */
-    public Closure $transformer;
+    public readonly Closure $transformer;
 
     /**
      * @param (callable(string):(string|null))|(Closure(string):(string|null)) $transformer A callable to transform the path before passing it to a child matcher. Return null to reject the match.
@@ -42,8 +42,8 @@ readonly class TransformerMatcher implements MatcherInterface
      */
     public function __construct(
         callable|Closure $transformer,
-        public string|null $capture_original = 'original_path',
-        public MatcherInterface|null $matcher = null,
+        public readonly string|null $capture_original = 'original_path',
+        public readonly MatcherInterface|null $matcher = null,
     )
     {
         if (!($transformer instanceof Closure)) {

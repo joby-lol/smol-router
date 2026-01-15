@@ -11,7 +11,7 @@ namespace Joby\Smol\Router;
 
 use Joby\Smol\Request\Request;
 
-readonly class MatchedRoute
+class MatchedRoute
 {
 
     /**
@@ -19,8 +19,8 @@ readonly class MatchedRoute
      * @param array<string, string> $parameters The parameters extracted from the request, as they appear in the request (i.e. all strings).
      */
     public function __construct(
-        public string $path,
-        public Request $request,
+        public readonly string $path,
+        public readonly Request $request,
         public array $parameters = [],
     ) {}
 
