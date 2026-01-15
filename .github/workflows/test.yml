@@ -24,8 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: php-actions/composer@v6
         with:
-          php_version: 8.1
+          php_version: 8.3
       - uses: php-actions/phpstan@v3
         with:
-          php_version: 8.1
+          php_version: 8.3
           configuration: phpstan.neon
