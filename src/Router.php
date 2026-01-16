@@ -74,6 +74,146 @@ class Router
     }
 
     /**
+     * Add a GET route to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * 
+     * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
+     */
+    public function get(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        return $this->add(
+            matcher: $matcher,
+            handler: $handler,
+            method: Method::GET,
+            priority: $priority,
+        );
+    }
+
+    /**
+     * Add a POST route to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * 
+     * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
+     */
+    public function post(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        return $this->add(
+            matcher: $matcher,
+            handler: $handler,
+            method: Method::POST,
+            priority: $priority,
+        );
+    }
+
+    /**
+     * Add a PUT route to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * 
+     * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
+     */
+    public function put(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        return $this->add(
+            matcher: $matcher,
+            handler: $handler,
+            method: Method::PUT,
+            priority: $priority,
+        );
+    }
+
+    /**
+     * Add a DELETE route to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * 
+     * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
+     */
+    public function delete(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        return $this->add(
+            matcher: $matcher,
+            handler: $handler,
+            method: Method::DELETE,
+            priority: $priority,
+        );
+    }
+
+    /**
+     * Add a PATCH route to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * 
+     * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
+     */
+    public function patch(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        return $this->add(
+            matcher: $matcher,
+            handler: $handler,
+            method: Method::PATCH,
+            priority: $priority,
+        );
+    }
+
+    /**
      * Add a route to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
      * 
      * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:

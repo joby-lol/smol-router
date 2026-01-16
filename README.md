@@ -14,6 +14,8 @@ This router uses [smolRequest](https://github.com/joby-lol/smol-request) for han
 
 ## Basic Usage
 
+Adding new routes with the `Router::add()` method will make them available for both `GET` and `POST` requests.
+
 ```php
 use Joby\Smol\Router\Router;
 use Joby\Smol\Router\Matchers\ExactMatcher;
@@ -22,9 +24,52 @@ use Joby\Smol\Response\Status;
 
 $router = new Router();
 
+// will match both GET and POST requests by default
 $router->add(
     new ExactMatcher('about'),
     fn() => new Response(new Status(200))
+);
+
+$response = $router->run($request);
+```
+
+## Request methods
+
+Routes can be limited to common request methods using `Router::get()`, `Router::post()`, etc.
+
+```php
+use Joby\Smol\Router\Router;
+use Joby\Smol\Router\Matchers\ExactMatcher;
+use Joby\Smol\Response\Response;
+use Joby\Smol\Response\Status;
+
+$router = new Router();
+
+// will only match GET requests
+$router->get(
+    new ExactMatcher('about'),
+    fn() => new Response(new Status(200))
+);
+
+$response = $router->run($request);
+```
+
+You can also specify your own list of request methods via `Router::add()` by passing values from the `Method` enum.
+
+```php
+use Joby\Smol\Router\Router;
+use Joby\Smol\Router\Matchers\ExactMatcher;
+use Joby\Smol\Response\Method;
+use Joby\Smol\Response\Response;
+use Joby\Smol\Response\Status;
+
+$router = new Router();
+
+// will only match PATCH and PUT requests
+$router->get(
+    new ExactMatcher('about'),
+    fn() => new Response(new Status(200)),
+    method: [Method::PATCH, Method::PUT]
 );
 
 $response = $router->run($request);
