@@ -24,8 +24,36 @@ use Throwable;
 class Router
 {
 
-    /** @var array<int, array<array{matcher: MatcherInterface, handler: Closure, method: array<Method>}>> $routes */
+    /** 
+     * Array of guard callbacks that run before normal route matching. Each consists of a matcher, handler callback, and allowed methods. The return value of the handler is used to determine whether to continue processing routes (null), stop processing and block access (false), or stop processing and allow access (true). If all guards return null, normal route processing continues as usual and access is allowed by default.
+     * 
+     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (bool|null), method: array<Method>|null}>> $guards
+     */
+    protected array $guards = [
+        Priority::HIGH->value   => [],
+        Priority::NORMAL->value => [],
+        Priority::LOW->value    => [],
+    ];
+
+    /**
+     * Array of routes, organized by priority. Each consists of a matcher, handler callback, and allowed methods. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed. If the handler returns a Response, it will be used as the response for the request. If it returns null, matching attempts will continue to the next route.
+     * 
+     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (Response|null), method: array<Method>}>> $routes
+     */
     protected array $routes = [
+        Priority::HIGH->value   => [],
+        Priority::NORMAL->value => [],
+        Priority::LOW->value    => [],
+    ];
+
+    /**
+     * Array of modifier callbacks that run after normal route matching. Each consists of a matcher, handler callback, and allowed methods. Handler will be passed the Response and any route parameters it requests for injection. If the handler returns a Response, it will be used in place of the Response it was passed, if it returns null, the original Response will be used.
+     * 
+     * If it returns a FinalResponse, that will be used and no further modifiers will be run.
+     * 
+     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (Response|null), method: array<Method>|null}>> $modifiers
+     */
+    protected array $modifiers = [
         Priority::HIGH->value   => [],
         Priority::NORMAL->value => [],
         Priority::LOW->value    => [],
@@ -245,35 +273,177 @@ class Router
     }
 
     /**
+     * Add a guard callback to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * The return value of the handler is used to determine whether to continue processing routes (null), stop processing and block access (false), or stop processing and allow access (true). If all guards return null, normal route processing continues as usual and access is allowed by default.
+     * 
+     * @param Method|array<Method> $method optionally limit the guard to specific HTTP methods, or null to apply to all
+     * @param (callable(mixed...): (bool|null))|(Closure(mixed...): (bool|null)) $handler
+     */
+    public function guard(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Method|array|null $method = null,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        if (!($handler instanceof Closure)) {
+            $handler = Closure::fromCallable($handler);
+        }
+        if ($method !== null && !is_array($method))
+            $method = [$method];
+        $this->guards[$priority->value][] = [
+            'method'  => $method,
+            'matcher' => $matcher,
+            'handler' => $handler,
+        ];
+        return $this;
+    }
+
+    /**
+     * Add a response modifier callback to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * 
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - A parameter named "response" with a type of Response (or a subclass) will be injected with the current Response.
+     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * 
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
+     * 
+     * The handler will be passed the Response and any route parameters it requests for injection. If the handler returns a Response, it will be used in place of the Response it was passed, if it returns null, the original Response will be used.
+     * 
+     * If the handler returns a FinalResponse, that will be used and no further modifiers will be run.
+     * 
+     * @param Method|array<Method> $method optionally limit the modifier to specific HTTP methods, or null to apply to all
+     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     */
+    public function modify(
+        MatcherInterface $matcher,
+        callable|Closure $handler,
+        Method|array|null $method = null,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        if (!($handler instanceof Closure)) {
+            $handler = Closure::fromCallable($handler);
+        }
+        if ($method !== null && !is_array($method))
+            $method = [$method];
+        $this->modifiers[$priority->value][] = [
+            'method'  => $method,
+            'matcher' => $matcher,
+            'handler' => $handler,
+        ];
+        return $this;
+    }
+
+    /**
      * Run the router against the given Request, returning a Response. Returns an error Response if no routes match, or if an exception is thrown while running a handler.
      */
     public function run(Request $request): Response
     {
+        // try to extract path, and return error immediately if it fails
         try {
             $path = $this->extractRoute($request);
-            foreach ($this->routes as $routes) {
-                foreach ($routes as $route) {
+        }
+        catch (Throwable $th) {
+            return $this->basicErrorResponse(
+                new HttpException(500, 'Error extracting route from request', $th),
+            );
+        }
+        // first run guards, and if they generate an error, use that to build a response
+        // @var Response|null $response
+        $response = null;
+        try {
+            // first run guards in priority order
+            foreach ($this->guards as $guards) {
+                foreach ($guards as $guard) {
                     // check methods first
-                    if (!in_array($request->method, $route['method']))
+                    if ($guard['method'] !== null && !in_array($request->method, $guard['method']))
                         continue;
                     // try to match
-                    $match = $route['matcher']->match($path, $request);
+                    $match = $guard['matcher']->match($path, $request);
+                    if (!$match)
+                        continue;
+                    // we have a match, so we need to run the handler and check the result
+                    $handler = $guard['handler'];
+                    $result = $this->runGuard($handler, $match);
+                    // allow access
+                    if ($result === true)
+                        break 2; // break out of both loops
+                    // block access with a 403 header
+                    elseif ($result === false)
+                        throw new HttpException(403);
+                    // if result is null, continue to next guard
+                }
+            }
+        }
+        catch (Throwable $th) {
+            $response = $this->errorResponse($th);
+        }
+        // then, if there is not an error response from running guards, run normal route matching
+        try {
+            if (!$response) {
+                // run route handlers in priority order
+                foreach ($this->routes as $routes) {
+                    foreach ($routes as $route) {
+                        // check methods first
+                        if (!in_array($request->method, $route['method']))
+                            continue;
+                        // try to match
+                        $match = $route['matcher']->match($path, $request);
+                        if (!$match)
+                            continue;
+                        // we have a match, so we need to run the handler and return the response if it gives one
+                        $handler = $route['handler'];
+                        $response = $this->runHandler($handler, $match);
+                        if ($response !== null)
+                            break 2; // break out of both loops
+                    }
+                }
+                // if there's no response, make a 404 response
+                if (!isset($response))
+                    $response = $this->errorResponse(new HttpException(404, 'No route matched the request'));
+                // short-circuit here if we have a FinalResponse
+                if ($response instanceof FinalResponse)
+                    return $response;
+            }
+        }
+        catch (Throwable $th) {
+            $response = $this->errorResponse($th);
+        }
+        try {
+            // finally run modifiers in priority order
+            foreach ($this->modifiers as $modifiers) {
+                foreach ($modifiers as $modifier) {
+                    // check methods first
+                    if ($modifier['method'] !== null && !in_array($request->method, $modifier['method']))
+                        continue;
+                    // try to match
+                    $match = $modifier['matcher']->match($path, $request);
                     if (!$match)
                         continue;
                     // we have a match, so we need to run the handler and return the response if it gives one
-                    $handler = $route['handler'];
-                    $response = $this->runHandler($handler, $match);
-                    if ($response !== null) {
+                    $handler = $modifier['handler'];
+                    $handler_output = $this->runModifier($handler, $match, $response);
+                    $response = $handler_output ?? $response;
+                    if ($response instanceof FinalResponse)
                         return $response;
-                    }
                 }
             }
-            // no routes matched, so throw a 404 exception
-            throw new HttpException(404);
         }
         catch (Throwable $th) {
             return $this->errorResponse($th);
         }
+        return $response;
     }
 
     /**
@@ -479,10 +649,32 @@ class Router
         return $handler(...$this->buildHandlerArguments($handler, $match));
     }
 
+    /** 
+     * Runs the given modifier with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
+     * 
+     * @param Closure(mixed...): (Response|null) $handler
+     */
+    protected function runModifier(Closure $handler, MatchedRoute $match, Response|null $response = null): Response|null
+    {
+        return $handler(...$this->buildHandlerArguments($handler, $match, $response));
+    }
+
+    /** 
+     * Runs the given guard with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
+     * 
+     * @param Closure(mixed...): (bool|null) $handler
+     */
+    protected function runGuard(Closure $handler, MatchedRoute $match): bool|null
+    {
+        return $handler(...$this->buildHandlerArguments($handler, $match));
+    }
+
     /**
+     * Build an array of arguments to pass to the given handler function, based on its parameter names and types, using the provided MatchedRoute to supply values. Has the ability to optionally include the current Response for modifier handlers.
+     * 
      * @return array<string,mixed>
      */
-    protected function buildHandlerArguments(Closure $fn, MatchedRoute $match): array
+    protected function buildHandlerArguments(Closure $fn, MatchedRoute $match, Response|null $response = null): array
     {
         $reflection = new ReflectionFunction($fn);
         $parameters = $reflection->getParameters();
@@ -521,6 +713,15 @@ class Router
                 foreach ($types as $typeName) {
                     if (is_a($typeName, Request::class, true)) {
                         $args[$name] = $match->request;
+                        continue 2; // continue outer loop
+                    }
+                }
+            }
+            // inject Response object if parameter type matches
+            if ($name === 'response' && $response !== null) {
+                foreach ($types as $typeName) {
+                    if (is_a($typeName, Response::class, true)) {
+                        $args[$name] = $response;
                         continue 2; // continue outer loop
                     }
                 }

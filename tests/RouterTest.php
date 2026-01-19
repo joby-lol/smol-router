@@ -601,4 +601,656 @@ class RouterTest extends TestCase
         return $response;
     }
 
+    // Guard tests
+
+    public function test_guard_allows_access_when_returning_null(): void
+    {
+        $router = new Router();
+        $router->guard(
+            new ExactMatcher('protected'),
+            fn() => null
+        );
+        $router->add(
+            new ExactMatcher('protected'),
+            fn() => $this->createTextResponse('allowed')
+        );
+
+        $request = $this->createRequest('/protected');
+        $response = $router->run($request);
+
+        $this->assertEquals(200, $response->status->code);
+        $this->assertStringContainsString('allowed', $response->content->content);
+    }
+
+    public function test_guard_blocks_access_when_returning_false(): void
+    {
+        $router = new Router();
+        $router->guard(
+            new ExactMatcher('protected'),
+            fn() => false
+        );
+        $router->add(
+            new ExactMatcher('protected'),
+            fn() => $this->createTextResponse('should not see this')
+        );
+
+        $request = $this->createRequest('/protected');
+        $response = $router->run($request);
+
+        $this->assertEquals(403, $response->status->code);
+    }
+
+    public function test_guard_allows_access_when_returning_true(): void
+    {
+        $router = new Router();
+        $router->guard(
+            new ExactMatcher('protected'),
+            fn() => true
+        );
+        $router->add(
+            new ExactMatcher('protected'),
+            fn() => $this->createTextResponse('allowed')
+        );
+
+        $request = $this->createRequest('/protected');
+        $response = $router->run($request);
+
+        $this->assertEquals(200, $response->status->code);
+        $this->assertStringContainsString('allowed', $response->content->content);
+    }
+
+    public function test_guard_injects_path_parameter(): void
+    {
+        $router = new Router();
+        $capturedPath = null;
+        $router->guard(
+            new ExactMatcher('test'),
+            function (string $path) use (&$capturedPath) {
+                $capturedPath = $path;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals('test', $capturedPath);
+    }
+
+    public function test_guard_injects_request_parameter(): void
+    {
+        $router = new Router();
+        $capturedMethod = null;
+        $router->guard(
+            new ExactMatcher('test'),
+            function (Request $request) use (&$capturedMethod) {
+                $capturedMethod = $request->method->value;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals('GET', $capturedMethod);
+    }
+
+    public function test_guard_injects_matched_parameters(): void
+    {
+        $router = new Router();
+        $capturedId = null;
+        $router->guard(
+            new PatternMatcher('users/:id'),
+            function (string $id) use (&$capturedId) {
+                $capturedId = $id;
+                return null;
+            }
+        );
+        $router->add(
+            new PatternMatcher('users/:id'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/users/123');
+        $router->run($request);
+
+        $this->assertEquals('123', $capturedId);
+    }
+
+    public function test_guard_filters_by_http_method(): void
+    {
+        $router = new Router();
+        $router->guard(
+            new ExactMatcher('api'),
+            fn() => false,
+            Method::POST,
+        );
+        $router->add(
+            new ExactMatcher('api'),
+            fn() => $this->createTextResponse('success')
+        );
+
+        $getRequest = $this->createRequest('/api', Method::GET);
+        $postRequest = $this->createRequest('/api', Method::POST);
+
+        $this->assertEquals(200, $router->run($getRequest)->status->code);
+        $this->assertEquals(403, $router->run($postRequest)->status->code);
+    }
+
+    public function test_guard_supports_multiple_http_methods(): void
+    {
+        $router = new Router();
+        $router->guard(
+            new ExactMatcher('api'),
+            fn() => false,
+            [Method::POST, Method::PUT],
+        );
+        $router->add(
+            new ExactMatcher('api'),
+            fn() => $this->createTextResponse('success')
+        );
+
+        $getRequest = $this->createRequest('/api', Method::GET);
+        $postRequest = $this->createRequest('/api', Method::POST);
+        $putRequest = $this->createRequest('/api', Method::PUT);
+
+        $this->assertEquals(200, $router->run($getRequest)->status->code);
+        $this->assertEquals(403, $router->run($postRequest)->status->code);
+        $this->assertEquals(403, $router->run($putRequest)->status->code);
+    }
+
+    public function test_guard_respects_priority(): void
+    {
+        $router = new Router();
+        $executionOrder = [];
+
+        $router->guard(
+            new CatchallMatcher(),
+            function () use (&$executionOrder) {
+                $executionOrder[] = 'low';
+                return null;
+            },
+            priority: Priority::LOW,
+        );
+        $router->guard(
+            new CatchallMatcher(),
+            function () use (&$executionOrder) {
+                $executionOrder[] = 'high';
+                return null;
+            },
+            priority: Priority::HIGH,
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals(['high', 'low'], $executionOrder);
+    }
+
+    public function test_guard_stops_processing_on_false(): void
+    {
+        $router = new Router();
+        $secondGuardCalled = false;
+
+        $router->guard(
+            new CatchallMatcher(),
+            fn() => false,
+            priority: Priority::HIGH,
+        );
+        $router->guard(
+            new CatchallMatcher(),
+            function () use (&$secondGuardCalled) {
+                $secondGuardCalled = true;
+                return null;
+            },
+            priority: Priority::LOW,
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertFalse($secondGuardCalled);
+    }
+
+    public function test_guard_stops_processing_on_true(): void
+    {
+        $router = new Router();
+        $secondGuardCalled = false;
+
+        $router->guard(
+            new CatchallMatcher(),
+            fn() => true,
+            priority: Priority::HIGH,
+        );
+        $router->guard(
+            new CatchallMatcher(),
+            function () use (&$secondGuardCalled) {
+                $secondGuardCalled = true;
+                return null;
+            },
+            priority: Priority::LOW,
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertFalse($secondGuardCalled);
+    }
+
+    public function test_guard_only_runs_on_matching_routes(): void
+    {
+        $router = new Router();
+        $guardCalled = false;
+
+        $router->guard(
+            new ExactMatcher('admin'),
+            function () use (&$guardCalled) {
+                $guardCalled = true;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('public'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/public');
+        $router->run($request);
+
+        $this->assertFalse($guardCalled);
+    }
+
+    // modifier tests
+
+    public function test_modify_receives_response(): void
+    {
+        $router = new Router();
+        $capturedStatus = null;
+
+        $router->modify(
+            new ExactMatcher('test'),
+            function (Response $response) use (&$capturedStatus) {
+                $capturedStatus = $response->status->code;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => new Response(new Status(201))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals(201, $capturedStatus);
+    }
+
+    public function test_modify_keeps_original_response_when_returning_null(): void
+    {
+        $router = new Router();
+        $router->modify(
+            new ExactMatcher('test'),
+            fn(Response $response) => null
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => $this->createTextResponse('original')
+        );
+
+        $request = $this->createRequest('/test');
+        $response = $router->run($request);
+
+        $this->assertStringContainsString('original', $response->content->content);
+    }
+
+    public function test_modify_replaces_response_when_returning_response(): void
+    {
+        $router = new Router();
+        $router->modify(
+            new ExactMatcher('test'),
+            fn(Response $response) => $this->createTextResponse('modifyed')
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => $this->createTextResponse('original')
+        );
+
+        $request = $this->createRequest('/test');
+        $response = $router->run($request);
+
+        $this->assertStringContainsString('modifyed', $response->content->content);
+        $this->assertStringNotContainsString('original', $response->content->content);
+    }
+
+    public function test_modify_injects_path_parameter(): void
+    {
+        $router = new Router();
+        $capturedPath = null;
+
+        $router->modify(
+            new ExactMatcher('test'),
+            function (string $path, Response $response) use (&$capturedPath) {
+                $capturedPath = $path;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals('test', $capturedPath);
+    }
+
+    public function test_modify_injects_request_parameter(): void
+    {
+        $router = new Router();
+        $capturedMethod = null;
+
+        $router->modify(
+            new ExactMatcher('test'),
+            function (Request $request, Response $response) use (&$capturedMethod) {
+                $capturedMethod = $request->method->value;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('test'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals('GET', $capturedMethod);
+    }
+
+    public function test_modify_injects_matched_parameters(): void
+    {
+        $router = new Router();
+        $capturedId = null;
+
+        $router->modify(
+            new PatternMatcher('users/:id'),
+            function (string $id, Response $response) use (&$capturedId) {
+                $capturedId = $id;
+                return null;
+            }
+        );
+        $router->add(
+            new PatternMatcher('users/:id'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/users/456');
+        $router->run($request);
+
+        $this->assertEquals('456', $capturedId);
+    }
+
+    public function test_modify_filters_by_http_method(): void
+    {
+        $router = new Router();
+        $modifierCalled = false;
+
+        $router->modify(
+            new ExactMatcher('api'),
+            function (Response $response) use (&$modifierCalled) {
+                $modifierCalled = true;
+                return null;
+            },
+            Method::POST,
+        );
+        $router->add(
+            new ExactMatcher('api'),
+            fn() => new Response(new Status(200))
+        );
+
+        $getRequest = $this->createRequest('/api', Method::GET);
+        $postRequest = $this->createRequest('/api', Method::POST);
+
+        $modifierCalled = false;
+        $router->run($getRequest);
+        $this->assertFalse($modifierCalled);
+
+        $modifierCalled = false;
+        $router->run($postRequest);
+        $this->assertTrue($modifierCalled);
+    }
+
+    public function test_modify_supports_multiple_http_methods(): void
+    {
+        $router = new Router();
+        $callCount = 0;
+
+        $router->modify(
+            new ExactMatcher('api'),
+            function (Response $response) use (&$callCount) {
+                $callCount++;
+                return null;
+            },
+            [Method::POST, Method::PUT],
+        );
+        $router->add(
+            new ExactMatcher('api'),
+            fn() => new Response(new Status(200))
+        );
+
+        $router->run($this->createRequest('/api', Method::GET));
+        $router->run($this->createRequest('/api', Method::POST));
+        $router->run($this->createRequest('/api', Method::PUT));
+
+        $this->assertEquals(2, $callCount);
+    }
+
+    public function test_modify_respects_priority(): void
+    {
+        $router = new Router();
+        $executionOrder = [];
+
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) use (&$executionOrder) {
+                $executionOrder[] = 'low';
+                return null;
+            },
+            priority: Priority::LOW,
+        );
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) use (&$executionOrder) {
+                $executionOrder[] = 'high';
+                return null;
+            },
+            priority: Priority::HIGH,
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertEquals(['high', 'low'], $executionOrder);
+    }
+
+    public function test_modify_chains_multiple_modifiers(): void
+    {
+        $router = new Router();
+
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) {
+                return $this->createTextResponse('first');
+            },
+            priority: Priority::HIGH,
+        );
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) {
+                $content = $response->content->content;
+                return $this->createTextResponse($content . ' second');
+            },
+            priority: Priority::LOW,
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => $this->createTextResponse('original')
+        );
+
+        $request = $this->createRequest('/test');
+        $response = $router->run($request);
+
+        $this->assertStringContainsString('first second', $response->content->content);
+    }
+
+    public function test_modify_only_runs_on_matching_routes(): void
+    {
+        $router = new Router();
+        $modifierCalled = false;
+
+        $router->modify(
+            new ExactMatcher('api'),
+            function (Response $response) use (&$modifierCalled) {
+                $modifierCalled = true;
+                return null;
+            }
+        );
+        $router->add(
+            new ExactMatcher('public'),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/public');
+        $router->run($request);
+
+        $this->assertFalse($modifierCalled);
+    }
+
+    public function test_modify_runs_on_404_response(): void
+    {
+        $router = new Router();
+        $capturedStatus = null;
+
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) use (&$capturedStatus) {
+                $capturedStatus = $response->status->code;
+                return null;
+            }
+        );
+
+        $request = $this->createRequest('/nonexistent');
+        $router->run($request);
+
+        $this->assertEquals(404, $capturedStatus);
+    }
+
+    public function test_modify_runs_when_guard_blocks(): void
+    {
+        $router = new Router();
+        $modifierCalled = false;
+
+        $router->guard(
+            new CatchallMatcher(),
+            fn() => false
+        );
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) use (&$modifierCalled) {
+                $modifierCalled = true;
+                return null;
+            }
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertTrue($modifierCalled);
+    }
+
+    public function test_handler_returning_final_response_skips_modifiers(): void
+    {
+        $router = new Router();
+        $modifierCalled = false;
+
+        $finalResponse = $this->createMock(FinalResponse::class);
+
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) use (&$modifierCalled) {
+                $modifierCalled = true;
+                return null;
+            }
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => $finalResponse
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertFalse($modifierCalled);
+    }
+
+    public function test_modifier_returning_final_response_skips_further_modifiers(): void
+    {
+        $router = new Router();
+        $secondmodifierCalled = false;
+
+        $finalResponse = $this->createMock(FinalResponse::class);
+
+        $router->modify(
+            new CatchallMatcher(),
+            fn(Response $response) => $finalResponse,
+            priority: Priority::HIGH,
+        );
+        $router->modify(
+            new CatchallMatcher(),
+            function (Response $response) use (&$secondmodifierCalled) {
+                $secondmodifierCalled = true;
+                return null;
+            },
+            priority: Priority::LOW,
+        );
+        $router->add(
+            new CatchallMatcher(),
+            fn() => new Response(new Status(200))
+        );
+
+        $request = $this->createRequest('/test');
+        $router->run($request);
+
+        $this->assertFalse($secondmodifierCalled);
+    }
+
 }
