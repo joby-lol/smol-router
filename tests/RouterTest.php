@@ -379,10 +379,8 @@ class RouterTest extends TestCase
     public function test_custom_error_page_builder_for_404(): void
     {
         $router = new Router();
-        $router->errorPageBuilder('404', function (HttpException $e) {
-            $response = new Response($e->status);
-            $response->setContent(new \Joby\Smol\Response\Content\StringContent('Custom 404'));
-            return $response;
+        $router->addErrorResponseBuilder('404', function (HttpException $exception) {
+            return new Response($exception->status, 'Custom 404');
         });
 
         $request = $this->createRequest('/nonexistent');
@@ -396,10 +394,8 @@ class RouterTest extends TestCase
     public function test_error_page_builder_wildcard_4xx(): void
     {
         $router = new Router();
-        $router->errorPageBuilder('4xx', function (HttpException $e) {
-            $response = new Response($e->status);
-            $response->setContent(new \Joby\Smol\Response\Content\StringContent('4xx error'));
-            return $response;
+        $router->addErrorResponseBuilder('4xx', function (HttpException $exception) {
+            return new Response($exception->status, '4xx error');
         });
 
         $request = $this->createRequest('/nonexistent');
@@ -413,10 +409,8 @@ class RouterTest extends TestCase
     public function test_error_page_builder_default(): void
     {
         $router = new Router();
-        $router->errorPageBuilder('default', function (HttpException $e) {
-            $response = new Response($e->status);
-            $response->setContent(new \Joby\Smol\Response\Content\StringContent('Default error'));
-            return $response;
+        $router->addErrorResponseBuilder('default', function (HttpException $exception) {
+            return new Response($exception->status, 'Default error');
         });
 
         $request = $this->createRequest('/nonexistent');
@@ -529,21 +523,6 @@ class RouterTest extends TestCase
 
         // Should fall back to default handler (500)
         $this->assertEquals(500, $response->status->code);
-    }
-
-    public function test_remove_error_page_builder(): void
-    {
-        $router = new Router();
-        $router->errorPageBuilder('404', fn() => $this->createTextResponse('Custom'));
-        $router->errorPageBuilder('404', null);
-
-        $request = $this->createRequest('/nonexistent');
-        $response = $router->run($request);
-
-        $content = $response->content->content;
-        $this->assertEquals(404, $response->status->code);
-        // Should use default error page
-        $this->assertStringContainsString('Error 404', $content);
     }
 
     public function test_extract_route_with_custom_extractor(): void
@@ -1251,6 +1230,165 @@ class RouterTest extends TestCase
         $router->run($request);
 
         $this->assertFalse($secondmodifierCalled);
+    }
+
+    public function test_error_page_builder_with_matcher(): void
+    {
+        $router = new Router();
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'API 404'),
+            new PrefixMatcher('api/'),
+        );
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'Web 404')
+        );
+
+        $apiRequest = $this->createRequest('/api/missing');
+        $webRequest = $this->createRequest('/web/missing');
+
+        $apiResponse = $router->run($apiRequest);
+        $webResponse = $router->run($webRequest);
+
+        $this->assertStringContainsString('API 404', $apiResponse->content->content);
+        $this->assertStringContainsString('Web 404', $webResponse->content->content);
+    }
+
+    public function test_error_page_builder_matcher_with_parameters(): void
+    {
+        $router = new Router();
+        $capturedVersion = null;
+
+        $router->addErrorResponseBuilder(
+            '404',
+            function (string $version, HttpException $exception) use (&$capturedVersion) {
+                $capturedVersion = $version;
+                return new Response($exception->status, "API {$version} not found");
+            },
+            new PatternMatcher('api/:version/:endpoint'),
+        );
+
+        $request = $this->createRequest('/api/v2/missing');
+        $response = $router->run($request);
+
+        $this->assertEquals('v2', $capturedVersion);
+        $this->assertStringContainsString('API v2 not found', $response->content->content);
+    }
+
+    public function test_error_page_builder_respects_priority(): void
+    {
+        $router = new Router();
+
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'low priority'),
+            priority: Priority::LOW,
+        );
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'high priority'),
+            priority: Priority::HIGH,
+        );
+
+        $request = $this->createRequest('/nonexistent');
+        $response = $router->run($request);
+
+        $this->assertStringContainsString('high priority', $response->content->content);
+    }
+
+    public function test_error_page_builder_null_fallback(): void
+    {
+        $router = new Router();
+
+        // First builder returns null
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => null,
+            priority: Priority::HIGH,
+        );
+        // Second builder handles it
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'fallback'),
+            priority: Priority::LOW,
+        );
+
+        $request = $this->createRequest('/nonexistent');
+        $response = $router->run($request);
+
+        $this->assertStringContainsString('fallback', $response->content->content);
+    }
+
+    public function test_error_page_builder_matcher_only_applies_to_matching_paths(): void
+    {
+        $router = new Router();
+        $apiBuilderCalled = false;
+
+        $router->addErrorResponseBuilder(
+            '404',
+            function (HttpException $exception) use (&$apiBuilderCalled) {
+                $apiBuilderCalled = true;
+                return new Response($exception->status, 'API error');
+            },
+            new PrefixMatcher('api/'),
+        );
+
+        $request = $this->createRequest('/web/missing');
+        $router->run($request);
+
+        $this->assertFalse($apiBuilderCalled);
+    }
+
+    public function test_error_page_builder_specificity_then_priority(): void
+    {
+        $router = new Router();
+
+        // More specific (404) with low priority
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'specific 404'),
+            priority: Priority::LOW,
+        );
+        // Less specific (4xx) with high priority
+        $router->addErrorResponseBuilder(
+            '4xx',
+            fn(HttpException $exception) => new Response($exception->status, 'generic 4xx'),
+            priority: Priority::HIGH,
+        );
+
+        $request = $this->createRequest('/nonexistent');
+        $response = $router->run($request);
+
+        // Specificity wins over priority
+        $this->assertStringContainsString('specific 404', $response->content->content);
+    }
+
+    public function test_error_page_builder_combines_matcher_and_code_specificity(): void
+    {
+        $router = new Router();
+
+        // Specific matcher with wildcard code
+        $router->addErrorResponseBuilder(
+            '4xx',
+            fn(HttpException $exception) => new Response($exception->status, 'API 4xx'),
+            new PrefixMatcher('api/'),
+        );
+        // Catchall matcher with specific code
+        $router->addErrorResponseBuilder(
+            '404',
+            fn(HttpException $exception) => new Response($exception->status, 'general 404')
+        );
+
+        $apiRequest = $this->createRequest('/api/missing');
+        $webRequest = $this->createRequest('/web/missing');
+
+        $apiResponse = $router->run($apiRequest);
+        $webResponse = $router->run($webRequest);
+
+        // Code specificity takes precedence
+        $this->assertStringContainsString('general 404', $apiResponse->content->content);
+        $this->assertStringContainsString('general 404', $webResponse->content->content);
     }
 
 }

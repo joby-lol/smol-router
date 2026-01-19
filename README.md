@@ -542,20 +542,6 @@ $router->modify(
 - `Response` - Replace the response with the returned one
 - `FinalResponse` - Replace the response and skip all remaining modifiers
 
-```php
-// Conditional modification
-$router->modify(
-    new CatchallMatcher(),
-    function (Response $response): Response|null {
-        if ($response->status->code >= 400) {
-            // Modify error responses
-            return createCustomErrorPage($response);
-        }
-        return null; // Leave successful responses unchanged
-    }
-);
-```
-
 ### Modifier Execution
 
 Modifiers run in priority order (HIGH → NORMAL → LOW) and unless a FinalResponse is returned all of them will be run:
@@ -641,23 +627,100 @@ $router->exceptionClassHandler(
 
 ### Error Page Builders
 
-Customize error responses by status code. Default implementation makes error pages that are simple txt files.
-
+Customize error responses by status code and route. Builders are evaluated by specificity first (specific codes before wildcards), then by priority within each level.
 ```php
 // Specific status code
-$router->errorPageBuilder('404', function (HttpException $e) {
-    $response = new Response($e->status);
+$router->addErrorResponseBuilder('404', function (HttpException $exception) {
+    $response = new Response($exception->status);
     $response->setContent(new StringContent('Page not found'));
     return $response;
 });
 
 // Wildcard patterns
-$router->errorPageBuilder('4xx', fn(HttpException $e) => /* ... */);
-$router->errorPageBuilder('40x', fn(HttpException $e) => /* ... */);
+$router->addErrorResponseBuilder('40x', fn(HttpException $exception) => /* ... */);
+$router->addErrorResponseBuilder('4xx', fn(HttpException $exception) => /* ... */);
 
 // Default fallback
-$router->errorPageBuilder('default', fn(HttpException $e) => /* ... */);
+$router->addErrorResponseBuilder('default', fn(HttpException $exception) => /* ... */);
 ```
+
+#### Route-Specific Error Pages
+
+Use matchers to customize error pages for different sections of your site:
+```php
+// API routes get JSON errors
+$router->addErrorResponseBuilder(
+    '404',
+    function (HttpException $exception) {
+        $response = new Response($exception->status);
+        $response->setContent(new StringContent(
+            json_encode(['error' => 'Not found'])
+        ));
+        $response->headers->set('Content-Type', 'application/json');
+        return $response;
+    },
+    new PrefixMatcher('api/')
+);
+
+// Admin section gets themed error pages
+$router->addErrorResponseBuilder(
+    '403',
+    fn(HttpException $exception) => renderAdminErrorPage($exception),
+    new PrefixMatcher('admin/')
+);
+
+// Everything else gets default error pages
+$router->addErrorResponseBuilder(
+    '404',
+    fn(HttpException $exception) => renderDefaultErrorPage($exception)
+);
+```
+
+#### Parameter Injection
+
+Error page builders support parameter injection from matchers:
+```php
+$router->addErrorResponseBuilder(
+    '404',
+    function (string $version, HttpException $exception) {
+        return new Response(
+            $exception->status,
+            "API version {$version} endpoint not found"
+        );
+    },
+    new PatternMatcher('api/:version')
+);
+```
+
+#### Priority and Fallback
+
+Control evaluation order with priorities, and return `null` to try the next builder:
+```php
+// Try specialized handler first
+$router->addErrorResponseBuilder(
+    '404',
+    function (HttpException $exception) {
+        if (shouldUseCustomPage()) {
+            return buildCustomPage($exception);
+        }
+        return null; // Fall back to next builder
+    },
+    priority: Priority::HIGH
+);
+
+// Fallback handler
+$router->addErrorResponseBuilder(
+    '404',
+    fn(HttpException $exception) => buildDefaultPage($exception),
+    priority: Priority::NORMAL
+);
+```
+
+#### Evaluation Order
+
+1. **Specificity**: Specific codes ("404") before patterns ("40x" → "4xx" → "default")
+2. **Priority**: Within each specificity level, HIGH → NORMAL → LOW
+3. **Fallback**: If a builder returns `null`, try the next one
 
 ## Route Normalization
 

@@ -15,6 +15,7 @@ use Joby\Smol\Request\Post\PostException;
 use Joby\Smol\Request\Request;
 use Joby\Smol\Response\Content\StringContent;
 use Joby\Smol\Response\Response;
+use Joby\Smol\Router\Matchers\CatchallMatcher;
 use Joby\Smol\URL\QueryException;
 use ReflectionFunction;
 use ReflectionUnionType;
@@ -68,8 +69,16 @@ class Router
     /** @var array<class-string<Throwable>, (Closure(Throwable): HttpException)> $exception_class_handlers a map of exception class names and Closures that convert them into HttpException instances */
     protected array $exception_class_handlers = [];
 
-    /** @var array<string, (Closure(HttpException): Response)> $error_page_builders a map of status code strings to Closures that generate Responses for them */
-    protected array $error_page_builders = [];
+    /**
+     * Error page builders organized by status code pattern, then priority. Each entry pairs a matcher with a handler that receives parameter injection and returns Response|null.
+     * 
+     * Patterns can be specific ("404"), wildcards ("40x", "4xx"), or "default". Evaluation order: specificity first (404 → 40x → 4xx → default), then priority within each level.
+     * 
+     * Handlers receive the HttpException via a parameter named $exception typed as HttpException, plus any matcher parameters. Return Response to handle the error, null to try the next builder.
+     * 
+     * @var array<string, array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (Response|null)}>>> $error_response_builders
+     */
+    protected array $error_response_builders = [];
 
     /**
      * @var array<string, callable(string): mixed> $typeHandlers a map of type names to handler functions that convert strings to that type, handlers should return null if conversion is not possible
@@ -247,11 +256,13 @@ class Router
      * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
      * - A parameter named "path" with type "string" will be injected with the matched path.
      * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
-     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * - Any other parameters will be injected from the matched route parameters, converted to the appropriate type if possible using registered type handlers.
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * @param Method|array<Method> $method
+     * Return a Response to send to the client.
+     * 
+     * @param Method|array<Method> $method optionally limit the route to specific HTTP methods, or null to apply to all
      * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
      */
     public function add(
@@ -273,16 +284,16 @@ class Router
     }
 
     /**
-     * Add a guard callback to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * Add a guard to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
      * 
      * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
      * - A parameter named "path" with type "string" will be injected with the matched path.
      * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
-     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * - Any other parameters will be injected from the matched route parameters, converted to the appropriate type if possible using registered type handlers.
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * The return value of the handler is used to determine whether to continue processing routes (null), stop processing and block access (false), or stop processing and allow access (true). If all guards return null, normal route processing continues as usual and access is allowed by default.
+     * Return null to continue processing, false to deny access (403 Forbidden), or true to allow access and skip remaining guards.
      * 
      * @param Method|array<Method> $method optionally limit the guard to specific HTTP methods, or null to apply to all
      * @param (callable(mixed...): (bool|null))|(Closure(mixed...): (bool|null)) $handler
@@ -308,19 +319,17 @@ class Router
     }
 
     /**
-     * Add a response modifier callback to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
+     * Add a response modifier to the router, using a MatcherInterface, a handler, and an optional Priority. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed.
      * 
      * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "response" with a type of Response (or a subclass) will be injected with the current Response.
      * - A parameter named "path" with type "string" will be injected with the matched path.
      * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
-     * - A parameter named "response" with a type of Response (or a subclass) will be injected with the current Response.
-     * - Any other parameters will be injected from the MatchedRoute parameters, converted to the appropriate type if possible using registered type handlers.
+     * - Any other parameters will be injected from the matched route parameters, converted to the appropriate type if possible using registered type handlers.
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * The handler will be passed the Response and any route parameters it requests for injection. If the handler returns a Response, it will be used in place of the Response it was passed, if it returns null, the original Response will be used.
-     * 
-     * If the handler returns a FinalResponse, that will be used and no further modifiers will be run.
+     * Return a Response to replace the current response, null to keep the original, or FinalResponse to replace and skip remaining modifiers.
      * 
      * @param Method|array<Method> $method optionally limit the modifier to specific HTTP methods, or null to apply to all
      * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
@@ -387,7 +396,7 @@ class Router
             }
         }
         catch (Throwable $th) {
-            $response = $this->errorResponse($th);
+            $response = $this->errorResponse($th, $path, $request);
         }
         // then, if there is not an error response from running guards, run normal route matching
         try {
@@ -411,14 +420,18 @@ class Router
                 }
                 // if there's no response, make a 404 response
                 if (!isset($response))
-                    $response = $this->errorResponse(new HttpException(404, 'No route matched the request'));
+                    $response = $this->errorResponse(
+                        new HttpException(404, 'No route matched the request'),
+                        $path,
+                        $request,
+                    );
                 // short-circuit here if we have a FinalResponse
                 if ($response instanceof FinalResponse)
                     return $response;
             }
         }
         catch (Throwable $th) {
-            $response = $this->errorResponse($th);
+            $response = $this->errorResponse($th, $path, $request);
         }
         try {
             // finally run modifiers in priority order
@@ -441,7 +454,7 @@ class Router
             }
         }
         catch (Throwable $th) {
-            return $this->errorResponse($th);
+            return $this->errorResponse($th, $path, $request);
         }
         return $response;
     }
@@ -504,9 +517,9 @@ class Router
     }
 
     /**
-     * Set an exception handler for the given exception class. The handler should accept an instance of the exception class, and return an HttpException instance. If set to null, removes the handler for that exception class.
+     * Register an exception handler for the given exception class. The handler receives the exception and returns an HttpException to convert it to an HTTP error. Set to null to remove a handler.
      * 
-     * Exact matches take precedence over matching subclasses, so if both a class and its subclass have handlers registered, the class handler will be used for that class, and the subclass handler will be used for instances of the subclass. In a tie the order of registration determines precedence, with earlier registrations taking precedence over later ones.
+     * Exact class matches take precedence over subclass matches. When multiple handlers match, earlier registrations take precedence.
      * 
      * @template T of Throwable
      * @param class-string<T> $exception_class
@@ -526,22 +539,44 @@ class Router
     }
 
     /**
-     * Set an error page builder for the given name. The name may be a specific status code (e.g. "404"), a class of status codes (e.g. "40x" or "4xx"), or "default" for a catch-all. The builder should accept an HttpException instance, and return a Response instance. If set to null, removes the builder for that name.
+     * Register an error page builder for status codes. Names can be specific ("404"), patterns ("40x", "4xx"), or "default". Builders are evaluated by specificity first, then priority within each level.
      * 
-     * More specificity takes precedence, so a "404" builder will be used before a "40x" builder, which will be used before a "4xx" builder, which will be used before the "default" builder.
+     * Handler callbacks will have their parameters injected automatically based on their names and types. The following parameter injections are supported:
+     * - A parameter named "exception" with type HttpException will be injected with the exception that triggered the error.
+     * - A parameter named "path" with type "string" will be injected with the matched path.
+     * - A parameter named "request" with a type of Request (or a subclass) will be injected with the matched Request.
+     * - Any other parameters will be injected from the matched route parameters, converted to the appropriate type if possible using registered type handlers.
      * 
-     * @param (callable(HttpException): Response)|(Closure(HttpException): Response)|null $builder
+     * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked.
+     * 
+     * Return a Response to handle the error, or null to try the next builder.
+     * 
+     * @param string $name Status code, pattern, or "default"
+     * @param callable|Closure $handler Handler receiving exception, returns Response|null
+     * @param MatcherInterface|null $matcher Optional matcher to scope when this builder applies
+     * @param Priority $priority Priority within specificity level
      */
-    public function errorPageBuilder(string $name, callable|Closure|null $builder): static
+    public function addErrorResponseBuilder(
+        string $name,
+        callable|Closure $handler,
+        MatcherInterface|null $matcher = null,
+        Priority $priority = Priority::NORMAL,
+    ): static
     {
-        if ($builder === null) {
-            unset($this->error_page_builders[$name]);
-            return $this;
+        $matcher = $matcher ?? new CatchallMatcher();
+        if (!($handler instanceof Closure))
+            $handler = Closure::fromCallable($handler);
+        if (!array_key_exists($name, $this->error_response_builders)) {
+            $this->error_response_builders[$name] = [
+                Priority::HIGH->value   => [],
+                Priority::NORMAL->value => [],
+                Priority::LOW->value    => [],
+            ];
         }
-        if (!($builder instanceof Closure)) {
-            $builder = Closure::fromCallable($builder);
-        }
-        $this->error_page_builders[$name] = $builder;
+        $this->error_response_builders[$name][$priority->value][] = [
+            'matcher' => $matcher,
+            'handler' => $handler,
+        ];
         return $this;
     }
 
@@ -578,7 +613,7 @@ class Router
     /**
      * Generates an error Response for a given Throwable, so that errors can be returned to the client in a consistent manner. First checks for registered error handlers for specific exception types, and wraps them in appropriate HttpException objects if needed. Then attempts to render an appropriate error response based on the status code, again using registered handlers if available.
      */
-    protected function errorResponse(Throwable $error): Response
+    protected function errorResponse(Throwable $error, string $path, Request $request): Response
     {
         // first look for exact class matches
         $handler = null;
@@ -616,9 +651,20 @@ class Router
             'default',
         ];
         foreach ($possible_handlers as $handler_name) {
-            if (array_key_exists($handler_name, $this->error_page_builders)) {
-                $response_handler = $this->error_page_builders[$handler_name];
-                return $response_handler($http_exception);
+            if (array_key_exists($handler_name, $this->error_response_builders)) {
+                foreach ($this->error_response_builders[$handler_name] as $builders_by_priority) {
+                    foreach ($builders_by_priority as $builder) {
+                        // check matcher first
+                        $match = $builder['matcher']->match($path, $request);
+                        if (!$match)
+                            continue;
+                        // run the handler
+                        $handler = $builder['handler'];
+                        $response = $this->runErrorPageBuilderHandler($handler, $match, $http_exception);
+                        if ($response)
+                            return $response;
+                    }
+                }
             }
         }
         // as a last resort return a generic response
@@ -626,7 +672,7 @@ class Router
     }
 
     /**
-     * Generate a basic error response for the given HttpException. Basic responses are simple text/plain responses with the status code and reason phrase.
+     * Generate a basic error response for the given HttpException. Basic responses are simple text/plain responses with the status code and reason phrase. These can be used any time an error response is needed, and no custom error page builder is available.
      */
     protected function basicErrorResponse(HttpException $http_exception): Response
     {
@@ -669,12 +715,31 @@ class Router
         return $handler(...$this->buildHandlerArguments($handler, $match));
     }
 
+    /** 
+     * Runs the given error page builder with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
+     * 
+     * @param Closure(mixed...): (Response|null) $handler
+     */
+    protected function runErrorPageBuilderHandler(
+        Closure $handler,
+        MatchedRoute $match,
+        HttpException $exception,
+    ): Response|null
+    {
+        return $handler(...$this->buildHandlerArguments($handler, $match, null, $exception));
+    }
+
     /**
-     * Build an array of arguments to pass to the given handler function, based on its parameter names and types, using the provided MatchedRoute to supply values. Has the ability to optionally include the current Response for modifier handlers.
+     * Build an array of arguments to pass to the given handler function, based on its parameter names and types, using the provided MatchedRoute to supply values. Has the ability to optionally include the current Response for modifier handlers, or the exception for error page builders.
      * 
      * @return array<string,mixed>
      */
-    protected function buildHandlerArguments(Closure $fn, MatchedRoute $match, Response|null $response = null): array
+    protected function buildHandlerArguments(
+        Closure $fn,
+        MatchedRoute $match,
+        Response|null $response = null,
+        HttpException|null $exception = null,
+    ): array
     {
         $reflection = new ReflectionFunction($fn);
         $parameters = $reflection->getParameters();
@@ -722,6 +787,15 @@ class Router
                 foreach ($types as $typeName) {
                     if (is_a($typeName, Response::class, true)) {
                         $args[$name] = $response;
+                        continue 2; // continue outer loop
+                    }
+                }
+            }
+            // inject Exception object if parameter type matches
+            if ($name === 'exception' && $exception !== null) {
+                foreach ($types as $typeName) {
+                    if (is_a($typeName, HttpException::class, true)) {
+                        $args[$name] = $exception;
                         continue 2; // continue outer loop
                     }
                 }
