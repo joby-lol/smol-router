@@ -26,7 +26,7 @@ use Joby\Smol\Router\MatcherInterface;
 class PatternMatcher implements MatcherInterface
 {
 
-    protected string $regex;
+    protected string|null $regex = null;
     /** @var array<string> */
     protected array $parameterNames = [];
 
@@ -36,11 +36,14 @@ class PatternMatcher implements MatcherInterface
     public function __construct(
         public readonly string $pattern
     ) {
-        $this->compilePattern();
     }
 
     public function match(string $path, Request $request): MatchedRoute|null
     {
+        // lazy-compile the pattern only when needed
+        if ($this->regex === null)
+            list($this->regex, $this->parameterNames) = PatternHelper::compilePattern($this->pattern, true, true);
+        // match and return
         if (preg_match($this->regex, $path, $matches)) {
             $parameters = [];
             foreach ($this->parameterNames as $index => $name) {
@@ -52,30 +55,5 @@ class PatternMatcher implements MatcherInterface
         return null;
     }
 
-    /**
-     * Compiles the pattern into a regex and extracts parameter names.
-     */
-    protected function compilePattern(): void
-    {
-        // Reset parameter names
-        $this->parameterNames = [];
-
-        // Escape regex special characters except for our parameter markers
-        $pattern = preg_quote($this->pattern, '#');
-
-        // Replace escaped colons back (since we want to use them for parameters)
-        // and extract parameter names
-        $pattern = preg_replace_callback(
-            '#\\\\:([a-zA-Z_][a-zA-Z0-9_]*)#',
-            function ($matches) {
-                $this->parameterNames[] = $matches[1];
-                return '([^/]+)'; // Match any characters except slashes
-            },
-            $pattern
-        );
-
-        // Create the final regex with anchors
-        $this->regex = '#^' . $pattern . '$#';
-    }
 
 }

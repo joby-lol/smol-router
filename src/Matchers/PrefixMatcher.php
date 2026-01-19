@@ -27,31 +27,17 @@ use Joby\Smol\Router\MatcherInterface;
  *   $router->add($apiV1->with(new PatternMatcher("users/:id")), ...);
  *   $router->add($apiV1->with(new PatternMatcher("posts/:id")), ...);
  */
-class PrefixMatcher implements MatcherInterface
+class PrefixMatcher extends AbstractComposableMatcher
 {
 
     /**
      * @param string $prefix The prefix to match at the beginning of the path
      * @param string|null $capture_remainder If set, captures the remainder as this parameter name. Defaults to "prefix_remainder". Pass null to disable.
-     * @param MatcherInterface|null $matcher Optional child matcher to match against the remainder. Typically set via with() method.
      */
     public function __construct(
         public readonly string $prefix,
         public readonly ?string $capture_remainder = 'prefix_remainder',
-        public readonly ?MatcherInterface $matcher = null,
     ) {}
-
-    /**
-     * Create a new PrefixMatcher composed with a child matcher.
-     * The child matcher will be matched against the remainder after the prefix.
-     *
-     * @param MatcherInterface $matcher The matcher to compose with
-     * @return self A new PrefixMatcher instance with the child matcher
-     */
-    public function with(MatcherInterface $matcher): self
-    {
-        return new self($this->prefix, $this->capture_remainder, $matcher);
-    }
 
     public function match(string $path, Request $request): MatchedRoute|null
     {
@@ -64,8 +50,8 @@ class PrefixMatcher implements MatcherInterface
         $parameters = [];
 
         // If child matcher provided, match it against remainder
-        if ($this->matcher !== null) {
-            $childMatch = $this->matcher->match($remainder, $request);
+        if ($this->child_matcher !== null) {
+            $childMatch = $this->child_matcher->match($remainder, $request);
 
             // Child matcher must match for composed matcher to match
             if ($childMatch === null) {

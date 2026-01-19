@@ -147,40 +147,30 @@ $router->add(
 );
 ```
 
-#### Composing with Other Matchers
+### PrefixPatternMatcher
 
-Use the `with()` method to compose a PrefixMatcher with another matcher. The child matcher will be matched against the remainder after the prefix.
-
-```php
-// Match api/users/:id pattern
-$api = new PrefixMatcher('api/v1/');
-$router->add(
-    $api->with(new PatternMatcher('users/:id')),
-    fn(int $id, string $prefix_remainder) => /* ... */
-);
-// Matches: api/v1/users/123 → $id = 123, $prefix_remainder = 'users/123'
-```
-
-#### Reusable Matcher Patterns
-
-Define a prefix once and compose it with multiple patterns:
+Matches paths starting with a pattern containing named parameters. By default, captures the remainder after the pattern as `prefix_remainder`.
 
 ```php
-$apiV1 = new PrefixMatcher('api/v1/');
-
+// Basic usage - captures remainder automatically
 $router->add(
-    $apiV1->with(new PatternMatcher('users/:id')),
-    fn(int $id) => /* handle user */
+    new PrefixPatternMatcher(':tenant/api/'),
+    fn(string $tenant, string $prefix_remainder) => /* ... */
 );
+// Matches: acme/api/users → $tenant = 'acme', $prefix_remainder = 'users'
+// Matches: acme/api/posts/123 → $tenant = 'acme', $prefix_remainder = 'posts/123'
 
+// Custom parameter name for remainder
 $router->add(
-    $apiV1->with(new PatternMatcher('posts/:id')),
-    fn(int $id) => /* handle post */
+    new PrefixPatternMatcher(':tenant/files/', 'path'),
+    fn(string $tenant, string $path) => /* ... */
 );
+// Matches: acme/files/document.pdf → $tenant = 'acme', $path = 'document.pdf'
 
+// Disable capture
 $router->add(
-    $apiV1->with(new SuffixMatcher('.json')),
-    fn() => /* handle JSON endpoints */
+    new PrefixPatternMatcher(':tenant/api/', null),
+    fn(string $tenant) => /* ... */
 );
 ```
 
@@ -211,40 +201,30 @@ $router->add(
 );
 ```
 
-#### Composing with Other Matchers
+### SuffixPatternMatcher
 
-Use the `with()` method to compose a SuffixMatcher with another matcher. The child matcher will be matched against the base path before the suffix.
-
-```php
-// Match users/:id.json pattern
-$json = new SuffixMatcher('.json');
-$router->add(
-    $json->with(new PatternMatcher('users/:id')),
-    fn(int $id, string $suffix_base) => /* ... */
-);
-// Matches: users/123.json → $id = 123, $suffix_base = 'users/123'
-```
-
-#### Reusable Matcher Patterns
-
-Define a suffix once and compose it with multiple patterns:
+Matches paths ending with a pattern containing named parameters. By default, captures the base path before the pattern as `suffix_remainder`.
 
 ```php
-$json = new SuffixMatcher('.json');
-
+// Basic usage - captures remainder automatically
 $router->add(
-    $json->with(new PatternMatcher('users/:id')),
-    fn(int $id) => /* handle user as JSON */
+    new SuffixPatternMatcher('/api/:tenant'),
+    fn(string $tenant, string $suffix_remainder) => /* ... */
 );
+// Matches: users/api/acme → $tenant = 'acme', $suffix_remainder = 'users'
+// Matches: posts/123/api/acme → $tenant = 'acme', $suffix_remainder = 'posts/123'
 
+// Custom parameter name for remainder
 $router->add(
-    $json->with(new PatternMatcher('posts/:id')),
-    fn(int $id) => /* handle post as JSON */
+    new SuffixPatternMatcher('/api/:tenant', 'resource'),
+    fn(string $tenant, string $resource) => /* ... */
 );
+// Matches: users/api/acme → $tenant = 'acme', $resource = 'users'
 
+// Disable capture
 $router->add(
-    $json->with(new PrefixMatcher('api/v1/')),
-    fn() => /* handle API v1 JSON endpoints */
+    new SuffixPatternMatcher('/api/:tenant', null),
+    fn(string $tenant) => /* ... */
 );
 ```
 
@@ -287,43 +267,87 @@ $router->add(
 );
 ```
 
-#### Reusable Transformer Patterns
+## Composing Matchers
 
-Define a transformer once and compose it with multiple matchers:
+Matchers can be composed together using the `with()` method to build complex matching patterns. Composable matchers accept a child matcher that will be evaluated against a transformed portion of the path.
+
+### Basic Composition
+
+Compose two matchers to combine their functionality:
 
 ```php
-$lowercase = new TransformerMatcher(fn(string $p) => strtolower($p));
+// Match api/users/:id pattern
+$api = new PrefixMatcher('api/');
+$router->add(
+    $api->with(new PatternMatcher('users/:id')),
+    fn(int $id, string $prefix_remainder) => /* ... */
+);
+// Matches: api/users/123 → $id = 123, $prefix_remainder = 'users/123'
+```
+
+### Nested Composition
+
+Chain multiple matchers for complex patterns:
+
+```php
+$tenant = new PrefixPatternMatcher(':tenant/');
+$versioned = $tenant->with(new PrefixPatternMatcher('api/v:version/'));
+$composed = $versioned->with(new PatternMatcher('users/:id'));
 
 $router->add(
-    $lowercase->with(new ExactMatcher('about')),
-    fn() => /* handle about page */
+    $composed,
+    fn(string $tenant, string $version, int $id) => /* ... */
+);
+// Matches: acme/api/v2/users/123 → $tenant = 'acme', $version = '2', $id = 123
+```
+
+### Reusable Compositions
+
+Define matchers once and compose them multiple times:
+
+```php
+$apiV1 = new PrefixMatcher('api/v1/');
+
+$router->add(
+    $apiV1->with(new PatternMatcher('users/:id')),
+    fn(int $id) => /* handle user */
 );
 
 $router->add(
-    $lowercase->with(new ExactMatcher('contact')),
-    fn() => /* handle contact page */
+    $apiV1->with(new PatternMatcher('posts/:id')),
+    fn(int $id) => /* handle post */
 );
 
 $router->add(
-    $lowercase->with(new PrefixMatcher('api/')),
-    fn(string $prefix_remainder) => /* handle API routes case-insensitively */
+    $apiV1->with(new SuffixMatcher('.json')),
+    fn() => /* handle JSON endpoints */
 );
 ```
 
-#### Transformer Rejection
+### Combining Different Matchers
 
-Transformers can reject matches by returning `null`:
+Mix various matcher types to build sophisticated routing patterns:
 
 ```php
-// Only match paths that start with 'allowed'
-$filtered = new TransformerMatcher(function(string $p) {
-    return str_starts_with($p, 'allowed') ? $p : null;
-});
+// Match users/:id.json with case-insensitive matching
+$lowercase = new TransformerMatcher(fn($p) => strtolower($p));
+$json = new SuffixMatcher('.json');
 
 $router->add(
-    $filtered->with(new PrefixMatcher('allowed')),
-    fn() => /* only paths starting with 'allowed' can match */
+    $lowercase->with($json->with(new PatternMatcher('users/:id'))),
+    fn(int $id, string $original_path) => /* ... */
 );
+// Matches: USERS/123.JSON → $id = 123, $original_path = 'USERS/123.JSON'
+
+// Match api/:version/users/:id.json
+$api = new PrefixPatternMatcher('api/:version/');
+$json = new SuffixMatcher('.json');
+
+$router->add(
+    $api->with($json->with(new PatternMatcher('users/:id'))),
+    fn(string $version, int $id) => /* ... */
+);
+// Matches: api/v2/users/123.json → $version = 'v2', $id = 123
 ```
 
 ## Parameter Injection

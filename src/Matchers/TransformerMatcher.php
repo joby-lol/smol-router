@@ -12,7 +12,6 @@ namespace Joby\Smol\Router\Matchers;
 use Closure;
 use Joby\Smol\Request\Request;
 use Joby\Smol\Router\MatchedRoute;
-use Joby\Smol\Router\MatcherInterface;
 
 /**
  * Transforms a path before matching it against a child matcher.
@@ -29,7 +28,7 @@ use Joby\Smol\Router\MatcherInterface;
  * - Composed: $lower = new TransformerMatcher(fn($p) => strtolower($p));
  *   $router->add($lower->with(new ExactMatcher('about')), ...);
  */
-class TransformerMatcher implements MatcherInterface
+class TransformerMatcher extends AbstractComposableMatcher
 {
 
     /** @var Closure(string):(string|null) the transformation method */
@@ -38,12 +37,10 @@ class TransformerMatcher implements MatcherInterface
     /**
      * @param (callable(string):(string|null))|(Closure(string):(string|null)) $transformer A callable to transform the path before passing it to a child matcher. Return null to reject the match.
      * @param string|null $capture_original If set, captures the original path before transformation as this parameter name. Defaults to "original_path". Pass null to disable.
-     * @param MatcherInterface|null $matcher Optional child matcher to match against the transformed path. Typically set via with() method.
      */
     public function __construct(
         callable|Closure $transformer,
         public readonly string|null $capture_original = 'original_path',
-        public readonly MatcherInterface|null $matcher = null,
     )
     {
         if (!($transformer instanceof Closure)) {
@@ -52,22 +49,10 @@ class TransformerMatcher implements MatcherInterface
         $this->transformer = $transformer;
     }
 
-    /**
-     * Create a new TransformerMatcher composed with a child matcher.
-     * The child matcher will be matched against the transformed path.
-     *
-     * @param MatcherInterface $matcher The matcher to compose with
-     * @return self A new TransformerMatcher instance with the child matcher
-     */
-    public function with(MatcherInterface $matcher): self
-    {
-        return new self($this->transformer, $this->capture_original, $matcher);
-    }
-
     public function match(string $path, Request $request): MatchedRoute|null
     {
         // No child matcher means no match
-        if (!$this->matcher) {
+        if (!$this->child_matcher) {
             return null;
         }
         // Transform the path
@@ -78,7 +63,7 @@ class TransformerMatcher implements MatcherInterface
             return null;
         }
         // Match transformed path against child matcher
-        $match = $this->matcher->match($transformed_path, $request);
+        $match = $this->child_matcher->match($transformed_path, $request);
         if ($match === null) {
             return null;
         }
