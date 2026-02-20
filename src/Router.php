@@ -26,7 +26,7 @@ class Router extends TinyRouter
     /** 
      * Array of guard callbacks that run before normal route matching. Each consists of a matcher, handler callback, and allowed methods. The return value of the handler is used to determine whether to continue processing routes (null), stop processing and block access (false), or stop processing and allow access (true). If all guards return null, normal route processing continues as usual and access is allowed by default.
      * 
-     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(...mixed): (bool|null), method: array<Method>|null}>> $guards
+     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (bool|null), method: array<Method>|null}>> $guards
      */
     protected array $guards = [
         Priority::HIGH->value   => [],
@@ -39,7 +39,7 @@ class Router extends TinyRouter
      * 
      * If it returns a FinalResponse, that will be used and no further modifiers will be run.
      * 
-     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(...mixed): (Response|null), method: array<Method>|null}>> $modifiers
+     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (Response|null), method: array<Method>|null}>> $modifiers
      */
     protected array $modifiers = [
         Priority::HIGH->value   => [],
@@ -57,7 +57,7 @@ class Router extends TinyRouter
      * 
      * Handlers receive the HttpException via a parameter named $exception typed as HttpException, plus any matcher parameters. Return Response to handle the error, null to try the next builder.
      * 
-     * @var array<string, array<int, array<array{matcher: MatcherInterface, handler: Closure(...mixed): (Response|null)}>>> $error_response_builders
+     * @var array<string, array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (Response|null)}>>> $error_response_builders
      */
     protected array $error_response_builders = [];
 
@@ -94,7 +94,6 @@ class Router extends TinyRouter
      * Return null to continue processing, false to deny access (403 Forbidden), or true to allow access and skip remaining guards.
      * 
      * @param Method|array<Method> $method optionally limit the guard to specific HTTP methods, or null to apply to all
-     * @param (callable(...mixed): (bool|null))|(Closure(...mixed): (bool|null)) $handler
      */
     public function guard(
         MatcherInterface $matcher,
@@ -130,7 +129,6 @@ class Router extends TinyRouter
      * Return a Response to replace the current response, null to keep the original, or FinalResponse to replace and skip remaining modifiers.
      * 
      * @param Method|array<Method> $method optionally limit the modifier to specific HTTP methods, or null to apply to all
-     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      */
     public function modify(
         MatcherInterface $matcher,
@@ -384,7 +382,7 @@ class Router extends TinyRouter
     /** 
      * Runs the given modifier with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
      * 
-     * @param Closure(...mixed): (Response|null) $handler
+     * @param Closure(mixed...): (Response|null) $handler
      */
     protected function runModifier(Closure $handler, MatchedRoute $match, Response|null $response = null): Response|null
     {
@@ -394,7 +392,7 @@ class Router extends TinyRouter
     /** 
      * Runs the given guard with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
      * 
-     * @param Closure(...mixed): (bool|null) $handler
+     * @param Closure(mixed...): (bool|null) $handler
      */
     protected function runGuard(Closure $handler, MatchedRoute $match): bool|null
     {
@@ -404,7 +402,7 @@ class Router extends TinyRouter
     /** 
      * Runs the given error page builder with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
      * 
-     * @param Closure(...mixed): (Response|null) $handler
+     * @param Closure(mixed...): (Response|null) $handler
      */
     protected function runErrorPageBuilderHandler(
         Closure $handler,
