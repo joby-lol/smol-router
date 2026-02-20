@@ -748,7 +748,9 @@ $router->addErrorResponseBuilder(
 
 ## Route Normalization
 
-The default normalizer enforces leading slashes, and does not strip trailing slashes. So /foo/bar is treated the same as foo/bar, but not as /foo/bar/. The root directory is considered a single slash.
+The default normalizer strips leading slashes, but not trailing slashes. So `/foo/bar` is the same as `foo/bar` but is not the same as `/foo/bar/`. The root is returned as an empty string.
+
+This is very specific, but is actually important to making the paths here easily interoperable with retrieving files via [smolFS](https://github.com/joby-lol/smol-fs).
 
 ```php
 // Convert to lowercase

@@ -35,7 +35,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/about'),
+            new ExactMatcher('about'),
             fn() => new Response(new Status(200))
         );
 
@@ -49,7 +49,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(string $id) => $this->createJsonResponse(['id' => $id])
         );
 
@@ -63,7 +63,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => $this->createJsonResponse(['id' => $id, 'type' => gettype($id)])
         );
 
@@ -77,7 +77,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(string $path, int $id) => $this->createJsonResponse(['path' => $path, 'id' => $id])
         );
 
@@ -91,7 +91,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(Request $request) => $this->createJsonResponse(['method' => $request->method->value])
         );
 
@@ -105,7 +105,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => new Response(new Status(200)),
             Method::GET,
         );
@@ -121,7 +121,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => new Response(new Status(200)),
             [Method::GET, Method::POST],
         );
@@ -177,7 +177,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/about/'),
+            new ExactMatcher('about/'),
             fn() => new Response(new Status(200))
         );
 
@@ -191,7 +191,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/'),
+            new ExactMatcher(''),
             fn() => new Response(new Status(200))
         );
 
@@ -206,7 +206,7 @@ class TinyRouterTest extends TestCase
         $router = new TinyRouter();
         $router->routeExtractor(fn(Request $r) => '/custom');
         $router->add(
-            new ExactMatcher('/custom'),
+            new ExactMatcher('custom'),
             fn() => new Response(new Status(200))
         );
 
@@ -221,7 +221,7 @@ class TinyRouterTest extends TestCase
         $router = new TinyRouter();
         $router->routeNormalizer(fn(string $route) => strtolower($route));
         $router->add(
-            new ExactMatcher('/about'),
+            new ExactMatcher('about'),
             fn() => new Response(new Status(200))
         );
 
@@ -235,7 +235,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(string $missing = 'default') => $this->createTextResponse($missing)
         );
 
@@ -249,7 +249,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(?string $missing) => $this->createTextResponse($missing ?? 'null')
         );
 
@@ -283,7 +283,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(string $required) => new Response(new Status(200))
         );
 
@@ -298,7 +298,7 @@ class TinyRouterTest extends TestCase
         $router = new TinyRouter();
         $router->typeHandler('custom', fn(string $v) => strtoupper($v));
         $router->add(
-            new PatternMatcher('/test/:value'),
+            new PatternMatcher('test/:value'),
             function (string $value) {
                 return $this->createTextResponse($value);
             }
@@ -314,7 +314,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => $this->createTextResponse(gettype($id))
         );
 
@@ -329,7 +329,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/price/:amount'),
+            new PatternMatcher('price/:amount'),
             fn(float $amount) => $this->createTextResponse(gettype($amount))
         );
 
@@ -344,7 +344,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/enabled/:flag'),
+            new PatternMatcher('enabled/:flag'),
             fn(bool $flag) => $this->createTextResponse($flag ? 'true' : 'false')
         );
 
@@ -359,7 +359,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new ExactMatcher('/error'),
+            new ExactMatcher('error'),
             function () {
                 throw new RuntimeException('Test error');
             }
@@ -376,7 +376,7 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PrefixMatcher('/api/', 'path'),
+            new PrefixMatcher('api/', 'path'),
             fn(string $path) => $this->createTextResponse("Path: $path")
         );
 
@@ -408,12 +408,12 @@ class TinyRouterTest extends TestCase
     {
         $router = new TinyRouter();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn() => $this->createTextResponse('pattern'),
             priority: Priority::NORMAL,
         );
         $router->add(
-            new ExactMatcher('/users/special'),
+            new ExactMatcher('users/special'),
             fn() => $this->createTextResponse('exact'),
             priority: Priority::HIGH,
         );
@@ -433,7 +433,7 @@ class TinyRouterTest extends TestCase
         $router = new TinyRouter();
         $router->typeHandler('int', null);
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => new Response(new Status(200))
         );
 
@@ -451,15 +451,15 @@ class TinyRouterTest extends TestCase
         $request = $this->createRequest('/anything');
         $extracted = $router->extractRoute($request);
 
-        $this->assertEquals('/extracted', $extracted);
+        $this->assertEquals('extracted', $extracted);
     }
 
     public function test_normalize_route_strips_leading_and_trailing_slashes(): void
     {
         $router = new TinyRouter();
 
-        $this->assertEquals('/about', $router->normalizeRoute('about'));
-        $this->assertEquals('/', $router->normalizeRoute('/'));
+        $this->assertEquals('about', $router->normalizeRoute('about'));
+        $this->assertEquals('', $router->normalizeRoute('/'));
     }
 
     public function test_normalize_route_with_custom_normalizer(): void
@@ -469,7 +469,7 @@ class TinyRouterTest extends TestCase
 
         $normalized = $router->normalizeRoute('/about/');
 
-        $this->assertEquals('/ABOUT/', $normalized);
+        $this->assertEquals('ABOUT/', $normalized);
     }
 
     private function createRequest(string $path, Method $method = Method::GET): Request

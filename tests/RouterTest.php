@@ -34,7 +34,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/about'),
+            new ExactMatcher('about'),
             fn() => new Response(new Status(200))
         );
 
@@ -48,11 +48,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(string $id) => $this->createJsonResponse(['id' => $id])
         );
 
-        $request = $this->createRequest('/users/123');
+        $request = $this->createRequest('users/123');
         $response = $router->run($request);
 
         $this->assertEquals(200, $response->status->code);
@@ -62,11 +62,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => $this->createJsonResponse(['id' => $id, 'type' => gettype($id)])
         );
 
-        $request = $this->createRequest('/users/123');
+        $request = $this->createRequest('users/123');
         $response = $router->run($request);
 
         $this->assertEquals(200, $response->status->code);
@@ -76,11 +76,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(string $path, int $id) => $this->createJsonResponse(['path' => $path, 'id' => $id])
         );
 
-        $request = $this->createRequest('/users/123');
+        $request = $this->createRequest('users/123');
         $response = $router->run($request);
 
         $this->assertEquals(200, $response->status->code);
@@ -90,7 +90,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(Request $request) => $this->createJsonResponse(['method' => $request->method->value])
         );
 
@@ -104,13 +104,13 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => new Response(new Status(200)),
             Method::GET,
         );
 
-        $getRequest = $this->createRequest('/api', Method::GET);
-        $postRequest = $this->createRequest('/api', Method::POST);
+        $getRequest = $this->createRequest('api', Method::GET);
+        $postRequest = $this->createRequest('api', Method::POST);
 
         $this->assertEquals(200, $router->run($getRequest)->status->code);
         $this->assertEquals(404, $router->run($postRequest)->status->code);
@@ -120,14 +120,14 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => new Response(new Status(200)),
             [Method::GET, Method::POST],
         );
 
-        $getRequest = $this->createRequest('/api', Method::GET);
-        $postRequest = $this->createRequest('/api', Method::POST);
-        $putRequest = $this->createRequest('/api', Method::PUT);
+        $getRequest = $this->createRequest('api', Method::GET);
+        $postRequest = $this->createRequest('api', Method::POST);
+        $putRequest = $this->createRequest('api', Method::PUT);
 
         $this->assertEquals(200, $router->run($getRequest)->status->code);
         $this->assertEquals(200, $router->run($postRequest)->status->code);
@@ -164,7 +164,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/about'),
+            new ExactMatcher('about'),
             fn() => new Response(new Status(200))
         );
 
@@ -178,21 +178,21 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/about/'),
+            new ExactMatcher('about/'),
             fn() => new Response(new Status(200))
         );
 
-        $request = $this->createRequest('/about/');
+        $request = $this->createRequest('about/');
         $response = $router->run($request);
 
         $this->assertEquals(200, $response->status->code);
     }
 
-    public function test_preserves_root_as_single_slash(): void
+    public function test_preserves_root_as_empty_string(): void
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/'),
+            new ExactMatcher(''),
             fn() => new Response(new Status(200))
         );
 
@@ -205,9 +205,9 @@ class RouterTest extends TestCase
     public function test_custom_route_extractor(): void
     {
         $router = new Router();
-        $router->routeExtractor(fn(Request $r) => '/custom');
+        $router->routeExtractor(fn(Request $r) => 'custom');
         $router->add(
-            new ExactMatcher('/custom'),
+            new ExactMatcher('custom'),
             fn() => new Response(new Status(200))
         );
 
@@ -222,11 +222,11 @@ class RouterTest extends TestCase
         $router = new Router();
         $router->routeNormalizer(fn(string $route) => strtolower($route));
         $router->add(
-            new ExactMatcher('/about'),
+            new ExactMatcher('about'),
             fn() => new Response(new Status(200))
         );
 
-        $request = $this->createRequest('/ABOUT');
+        $request = $this->createRequest('ABOUT');
         $response = $router->run($request);
 
         $this->assertEquals(200, $response->status->code);
@@ -236,7 +236,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(string $missing = 'default') => $this->createTextResponse($missing)
         );
 
@@ -250,7 +250,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(?string $missing) => $this->createTextResponse($missing ?? 'null')
         );
 
@@ -284,7 +284,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(string $required) => new Response(new Status(200))
         );
 
@@ -299,13 +299,13 @@ class RouterTest extends TestCase
         $router = new Router();
         $router->typeHandler('custom', fn(string $v) => strtoupper($v));
         $router->add(
-            new PatternMatcher('/test/:value'),
+            new PatternMatcher('test/:value'),
             function (string $value) {
                 return $this->createTextResponse($value);
             }
         );
 
-        $request = $this->createRequest('/test/hello');
+        $request = $this->createRequest('test/hello');
         $response = $router->run($request);
 
         $this->assertEquals(200, $response->status->code);
@@ -315,7 +315,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => $this->createTextResponse(gettype($id))
         );
 
@@ -330,7 +330,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/price/:amount'),
+            new PatternMatcher('price/:amount'),
             fn(float $amount) => $this->createTextResponse(gettype($amount))
         );
 
@@ -345,7 +345,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/enabled/:flag'),
+            new PatternMatcher('enabled/:flag'),
             fn(bool $flag) => $this->createTextResponse($flag ? 'true' : 'false')
         );
 
@@ -364,7 +364,7 @@ class RouterTest extends TestCase
             fn(RuntimeException $e) => new HttpException(503, 'Service Unavailable')
         );
         $router->add(
-            new ExactMatcher('/error'),
+            new ExactMatcher('error'),
             function () {
                 throw new RuntimeException('Test error');
             }
@@ -425,7 +425,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PrefixMatcher('/api/', 'path'),
+            new PrefixMatcher('api/', 'path'),
             fn(string $path) => $this->createTextResponse("Path: $path")
         );
 
@@ -457,12 +457,12 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn() => $this->createTextResponse('pattern'),
             priority: Priority::NORMAL,
         );
         $router->add(
-            new ExactMatcher('/users/special'),
+            new ExactMatcher('users/special'),
             fn() => $this->createTextResponse('exact'),
             priority: Priority::HIGH,
         );
@@ -481,7 +481,7 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => new Response(new Status(200))
         );
 
@@ -496,7 +496,7 @@ class RouterTest extends TestCase
         $router = new Router();
         $router->typeHandler('int', null);
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn(int $id) => new Response(new Status(200))
         );
 
@@ -512,7 +512,7 @@ class RouterTest extends TestCase
         $router = new Router();
         $router->exceptionClassHandler(HttpException::class, null);
         $router->add(
-            new ExactMatcher('/error'),
+            new ExactMatcher('error'),
             function () {
                 throw new HttpException(418);
             }
@@ -528,20 +528,20 @@ class RouterTest extends TestCase
     public function test_extract_route_with_custom_extractor(): void
     {
         $router = new Router();
-        $router->routeExtractor(fn(Request $r) => '/extracted');
+        $router->routeExtractor(fn(Request $r) => 'extracted');
 
         $request = $this->createRequest('/anything');
         $extracted = $router->extractRoute($request);
 
-        $this->assertEquals('/extracted', $extracted);
+        $this->assertEquals('extracted', $extracted);
     }
 
     public function test_normalize_route_adds_leading_slash(): void
     {
         $router = new Router();
 
-        $this->assertEquals('/about/', $router->normalizeRoute('about/'));
-        $this->assertEquals('/', $router->normalizeRoute(''));
+        $this->assertEquals('about/', $router->normalizeRoute('/about/'));
+        $this->assertEquals('', $router->normalizeRoute('/'));
     }
 
     public function test_normalize_route_with_custom_normalizer(): void
@@ -551,7 +551,7 @@ class RouterTest extends TestCase
 
         $normalized = $router->normalizeRoute('/about/');
 
-        $this->assertEquals('/ABOUT/', $normalized);
+        $this->assertEquals('ABOUT/', $normalized);
     }
 
     private function createRequest(string $path, Method $method = Method::GET): Request
@@ -586,11 +586,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->guard(
-            new ExactMatcher('/protected'),
+            new ExactMatcher('protected'),
             fn() => null
         );
         $router->add(
-            new ExactMatcher('/protected'),
+            new ExactMatcher('protected'),
             fn() => $this->createTextResponse('allowed')
         );
 
@@ -605,11 +605,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->guard(
-            new ExactMatcher('/protected'),
+            new ExactMatcher('protected'),
             fn() => false
         );
         $router->add(
-            new ExactMatcher('/protected'),
+            new ExactMatcher('protected'),
             fn() => $this->createTextResponse('should not see this')
         );
 
@@ -623,11 +623,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->guard(
-            new ExactMatcher('/protected'),
+            new ExactMatcher('protected'),
             fn() => true
         );
         $router->add(
-            new ExactMatcher('/protected'),
+            new ExactMatcher('protected'),
             fn() => $this->createTextResponse('allowed')
         );
 
@@ -643,21 +643,21 @@ class RouterTest extends TestCase
         $router = new Router();
         $capturedPath = null;
         $router->guard(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             function (string $path) use (&$capturedPath) {
                 $capturedPath = $path;
                 return null;
             }
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => new Response(new Status(200))
         );
 
         $request = $this->createRequest('/test');
         $router->run($request);
 
-        $this->assertEquals('/test', $capturedPath);
+        $this->assertEquals('test', $capturedPath);
     }
 
     public function test_guard_injects_request_parameter(): void
@@ -665,14 +665,14 @@ class RouterTest extends TestCase
         $router = new Router();
         $capturedMethod = null;
         $router->guard(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             function (Request $request) use (&$capturedMethod) {
                 $capturedMethod = $request->method->value;
                 return null;
             }
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => new Response(new Status(200))
         );
 
@@ -687,14 +687,14 @@ class RouterTest extends TestCase
         $router = new Router();
         $capturedId = null;
         $router->guard(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             function (string $id) use (&$capturedId) {
                 $capturedId = $id;
                 return null;
             }
         );
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn() => new Response(new Status(200))
         );
 
@@ -708,12 +708,12 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->guard(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => false,
             Method::POST,
         );
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => $this->createTextResponse('success')
         );
 
@@ -728,12 +728,12 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->guard(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => false,
             [Method::POST, Method::PUT],
         );
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => $this->createTextResponse('success')
         );
 
@@ -842,14 +842,14 @@ class RouterTest extends TestCase
         $guardCalled = false;
 
         $router->guard(
-            new ExactMatcher('/admin'),
+            new ExactMatcher('admin'),
             function () use (&$guardCalled) {
                 $guardCalled = true;
                 return null;
             }
         );
         $router->add(
-            new ExactMatcher('/public'),
+            new ExactMatcher('public'),
             fn() => new Response(new Status(200))
         );
 
@@ -867,14 +867,14 @@ class RouterTest extends TestCase
         $capturedStatus = null;
 
         $router->modify(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             function (Response $response) use (&$capturedStatus) {
                 $capturedStatus = $response->status->code;
                 return null;
             }
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => new Response(new Status(201))
         );
 
@@ -888,11 +888,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->modify(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(Response $response) => null
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => $this->createTextResponse('original')
         );
 
@@ -906,11 +906,11 @@ class RouterTest extends TestCase
     {
         $router = new Router();
         $router->modify(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn(Response $response) => $this->createTextResponse('modifyed')
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => $this->createTextResponse('original')
         );
 
@@ -927,21 +927,21 @@ class RouterTest extends TestCase
         $capturedPath = null;
 
         $router->modify(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             function (string $path, Response $response) use (&$capturedPath) {
                 $capturedPath = $path;
                 return null;
             }
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => new Response(new Status(200))
         );
 
         $request = $this->createRequest('/test');
         $router->run($request);
 
-        $this->assertEquals('/test', $capturedPath);
+        $this->assertEquals('test', $capturedPath);
     }
 
     public function test_modify_injects_request_parameter(): void
@@ -950,14 +950,14 @@ class RouterTest extends TestCase
         $capturedMethod = null;
 
         $router->modify(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             function (Request $request, Response $response) use (&$capturedMethod) {
                 $capturedMethod = $request->method->value;
                 return null;
             }
         );
         $router->add(
-            new ExactMatcher('/test'),
+            new ExactMatcher('test'),
             fn() => new Response(new Status(200))
         );
 
@@ -973,14 +973,14 @@ class RouterTest extends TestCase
         $capturedId = null;
 
         $router->modify(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             function (string $id, Response $response) use (&$capturedId) {
                 $capturedId = $id;
                 return null;
             }
         );
         $router->add(
-            new PatternMatcher('/users/:id'),
+            new PatternMatcher('users/:id'),
             fn() => new Response(new Status(200))
         );
 
@@ -996,7 +996,7 @@ class RouterTest extends TestCase
         $modifierCalled = false;
 
         $router->modify(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             function (Response $response) use (&$modifierCalled) {
                 $modifierCalled = true;
                 return null;
@@ -1004,7 +1004,7 @@ class RouterTest extends TestCase
             Method::POST,
         );
         $router->add(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             fn() => new Response(new Status(200))
         );
 
@@ -1026,7 +1026,7 @@ class RouterTest extends TestCase
         $callCount = 0;
 
         $router->modify(
-            new ExactMatcher('/api'),
+            new ExactMatcher('api'),
             function (Response $response) use (&$callCount) {
                 $callCount++;
                 return null;
@@ -1238,7 +1238,7 @@ class RouterTest extends TestCase
         $router->addErrorResponseBuilder(
             '404',
             fn(HttpException $exception) => new Response($exception->status, 'API 404'),
-            new PrefixMatcher('/api/'),
+            new PrefixMatcher('api/'),
         );
         $router->addErrorResponseBuilder(
             '404',
@@ -1266,7 +1266,7 @@ class RouterTest extends TestCase
                 $capturedVersion = $version;
                 return new Response($exception->status, "API {$version} not found");
             },
-            new PatternMatcher('/api/:version/:endpoint'),
+            new PatternMatcher('api/:version/:endpoint'),
         );
 
         $request = $this->createRequest('/api/v2/missing');

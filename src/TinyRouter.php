@@ -273,7 +273,7 @@ class TinyRouter
     }
 
     /**
-     * Set the route normalizer callable, which runs after the route is extracted from the request, before matching. The default normalizer enforces leading slashes, and does not strip trailing slashes. So /foo/bar is treated the same as foo/bar, but not as /foo/bar/. The root directory is considered a single slash.
+     * Set the route normalizer callable, which runs after the route is extracted from the request, before matching. The default normalizer strips leading slashes, but not trailing slashes. So `/foo/bar` is the same as `foo/bar` but is not the same as `/foo/bar/`. The root is returned as an empty string.
      *
      * This default normalization is always applied, even after any additional normalization.
      *
@@ -308,7 +308,7 @@ class TinyRouter
     }
 
     /**
-     * Apply route normalization, including any custom normalizer that has been added. The default normalizer enforces leading slashes, and does not strip trailing slashes. So /foo/bar is treated the same as foo/bar, but not as /foo/bar/. The root directory is considered a single slash.
+     * Apply route normalization, including any custom normalizer that has been added. The default normalizer strips leading slashes, but not trailing slashes. So `/foo/bar` is the same as `foo/bar` but is not the same as `/foo/bar/`. The root is returned as an empty string.
      */
     public function normalizeRoute(string $route): string
     {
@@ -316,9 +316,8 @@ class TinyRouter
         if ($this->route_normalizer) {
             $route = ($this->route_normalizer)($route);
         }
-        // apply standard built-in normalization
-        if (!str_starts_with($route, '/'))
-            $route = '/' . $route;
+        // apply standard built-in normalization, stripping leading slashes only
+        $route = ltrim($route, '/');
         // return normalized route
         return $route;
     }
