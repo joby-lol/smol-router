@@ -769,6 +769,12 @@ $router->routeExtractor(function (Request $request): string {
 });
 ```
 
+## TinyRouter
+
+There is also a more stripped-down version available, called `TinyRouter` that can be used in cases where the full router class is too opinionated. TinyRouter does not support guards, modifiers, exception handlers, or exception response building. It simply returns null from `run()` if no Response was generated, and does not do any of its own exception handling.
+
+TinyRouter also does not support FinalResponse skipping, as it will always return the first Response a handler produces.
+
 ## Requirements
 
 Fully tested on PHP 8.3+, static analysis for PHP 8.1+.
