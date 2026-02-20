@@ -26,7 +26,7 @@ $router = new Router();
 
 // will match both GET and POST requests by default
 $router->add(
-    new ExactMatcher('about'),
+    new ExactMatcher('/about'),
     fn() => new Response(new Status(200))
 );
 
@@ -47,7 +47,7 @@ $router = new Router();
 
 // will only match GET requests
 $router->get(
-    new ExactMatcher('about'),
+    new ExactMatcher('/about'),
     fn() => new Response(new Status(200))
 );
 
@@ -67,7 +67,7 @@ $router = new Router();
 
 // will only match PATCH and PUT requests
 $router->get(
-    new ExactMatcher('about'),
+    new ExactMatcher('/about'),
     fn() => new Response(new Status(200)),
     method: [Method::PATCH, Method::PUT]
 );
@@ -83,7 +83,7 @@ Matches a specific path exactly.
 
 ```php
 $router->add(
-    new ExactMatcher('about'),
+    new ExactMatcher('/about'),
     fn() => new Response(new Status(200))
 );
 // Matches: about
@@ -96,14 +96,14 @@ Matches paths with named parameters.
 
 ```php
 $router->add(
-    new PatternMatcher('users/:id'),
+    new PatternMatcher('/users/:id'),
     fn(string $id) => new Response(new Status(200))
 );
 // Matches: users/123, users/abc
 // Doesn't match: users, users/123/posts
 
 $router->add(
-    new PatternMatcher('posts/:post_id/comments/:comment_id'),
+    new PatternMatcher('/posts/:post_id/comments/:comment_id'),
     fn(string $post_id, string $comment_id) => /* ... */
 );
 // Matches: posts/456/comments/789
@@ -127,7 +127,7 @@ Matches any path starting with a prefix. By default, captures the remainder afte
 ```php
 // Basic usage - captures remainder automatically
 $router->add(
-    new PrefixMatcher('api/'),
+    new PrefixMatcher('/api/'),
     fn(string $prefix_remainder) => /* ... */
 );
 // Matches: api/users → $prefix_remainder = 'users'
@@ -135,14 +135,14 @@ $router->add(
 
 // Custom parameter name
 $router->add(
-    new PrefixMatcher('files/', 'path'),
+    new PrefixMatcher('/files/', 'path'),
     fn(string $path) => /* ... */
 );
 // Matches: files/document.pdf → $path = 'document.pdf'
 
 // Disable capture
 $router->add(
-    new PrefixMatcher('api/', null),
+    new PrefixMatcher('/api/', null),
     fn() => /* ... */
 );
 ```
@@ -154,7 +154,7 @@ Matches paths starting with a pattern containing named parameters. By default, c
 ```php
 // Basic usage - captures remainder automatically
 $router->add(
-    new PrefixPatternMatcher(':tenant/api/'),
+    new PrefixPatternMatcher('/:tenant/api/'),
     fn(string $tenant, string $prefix_remainder) => /* ... */
 );
 // Matches: acme/api/users → $tenant = 'acme', $prefix_remainder = 'users'
@@ -169,7 +169,7 @@ $router->add(
 
 // Disable capture
 $router->add(
-    new PrefixPatternMatcher(':tenant/api/', null),
+    new PrefixPatternMatcher('/:tenant/api/', null),
     fn(string $tenant) => /* ... */
 );
 ```
@@ -246,7 +246,7 @@ $router->add(
 // Remove query strings
 $router->add(
     new TransformerMatcher(fn(string $p) => explode('?', $p)[0])
-        ->with(new ExactMatcher('search')),
+        ->with(new ExactMatcher('/search')),
     fn() => /* ... */
 );
 // Matches: 'search?q=test', 'search?filter=all'
@@ -254,7 +254,7 @@ $router->add(
 // Custom parameter name for original path
 $router->add(
     new TransformerMatcher(fn($p) => strtolower($p), 'raw_path')
-        ->with(new PatternMatcher('users/:id')),
+        ->with(new PatternMatcher('/users/:id')),
     fn(int $id, string $raw_path) => /* ... */
 );
 // Matches: 'USERS/123' → $id = 123, $raw_path = 'USERS/123'
@@ -262,7 +262,7 @@ $router->add(
 // Disable capturing original path
 $router->add(
     new TransformerMatcher(fn($p) => urldecode($p), null)
-        ->with(new PatternMatcher('search/:query')),
+        ->with(new PatternMatcher('/search/:query')),
     fn(string $query) => /* ... */
 );
 ```
@@ -277,9 +277,9 @@ Compose two matchers to combine their functionality:
 
 ```php
 // Match api/users/:id pattern
-$api = new PrefixMatcher('api/');
+$api = new PrefixMatcher('/api/');
 $router->add(
-    $api->with(new PatternMatcher('users/:id')),
+    $api->with(new PatternMatcher('/users/:id')),
     fn(int $id, string $prefix_remainder) => /* ... */
 );
 // Matches: api/users/123 → $id = 123, $prefix_remainder = 'users/123'
@@ -290,9 +290,9 @@ $router->add(
 Chain multiple matchers for complex patterns:
 
 ```php
-$tenant = new PrefixPatternMatcher(':tenant/');
-$versioned = $tenant->with(new PrefixPatternMatcher('api/v:version/'));
-$composed = $versioned->with(new PatternMatcher('users/:id'));
+$tenant = new PrefixPatternMatcher('/:tenant/');
+$versioned = $tenant->with(new PrefixPatternMatcher('/api/v:version/'));
+$composed = $versioned->with(new PatternMatcher('/users/:id'));
 
 $router->add(
     $composed,
@@ -306,15 +306,15 @@ $router->add(
 Define matchers once and compose them multiple times:
 
 ```php
-$apiV1 = new PrefixMatcher('api/v1/');
+$apiV1 = new PrefixMatcher('/api/v1/');
 
 $router->add(
-    $apiV1->with(new PatternMatcher('users/:id')),
+    $apiV1->with(new PatternMatcher('/users/:id')),
     fn(int $id) => /* handle user */
 );
 
 $router->add(
-    $apiV1->with(new PatternMatcher('posts/:id')),
+    $apiV1->with(new PatternMatcher('/posts/:id')),
     fn(int $id) => /* handle post */
 );
 
@@ -334,17 +334,17 @@ $lowercase = new TransformerMatcher(fn($p) => strtolower($p));
 $json = new SuffixMatcher('.json');
 
 $router->add(
-    $lowercase->with($json->with(new PatternMatcher('users/:id'))),
+    $lowercase->with($json->with(new PatternMatcher('/users/:id'))),
     fn(int $id, string $original_path) => /* ... */
 );
 // Matches: USERS/123.JSON → $id = 123, $original_path = 'USERS/123.JSON'
 
 // Match api/:version/users/:id.json
-$api = new PrefixPatternMatcher('api/:version/');
+$api = new PrefixPatternMatcher('/api/:version/');
 $json = new SuffixMatcher('.json');
 
 $router->add(
-    $api->with($json->with(new PatternMatcher('users/:id'))),
+    $api->with($json->with(new PatternMatcher('/users/:id'))),
     fn(string $version, int $id) => /* ... */
 );
 // Matches: api/v2/users/123.json → $version = 'v2', $id = 123
@@ -357,33 +357,33 @@ Handler functions automatically receive parameters extracted by matchers, with t
 ```php
 // String parameters
 $router->add(
-    new PatternMatcher('users/:id'),
+    new PatternMatcher('/users/:id'),
     fn(string $id) => /* $id is a string */
 );
 
 // Typed parameters (automatically converted)
 $router->add(
-    new PatternMatcher('users/:id'),
+    new PatternMatcher('/users/:id'),
     fn(int $id) => /* $id is converted to int */
 );
 
 // Multiple parameters
 $router->add(
-    new PatternMatcher('posts/:id/page/:page'),
+    new PatternMatcher('/posts/:id/page/:page'),
     fn(int $id, int $page) => /* both converted to int */
 );
 
 // Request injection
 // To get the full Request object, add a typed parameter named "$request"
 $router->add(
-    new ExactMatcher('info'),
+    new ExactMatcher('/info'),
     fn(Request $request) => /* receives the full request object */
 );
 
 // Path injection
 // To get the full matched path, add a string parameter called "$path"
 $router->add(
-    new PatternMatcher('users/:id'),
+    new PatternMatcher('/users/:id'),
     fn(string $path, int $id) => /* $path = 'users/123', $id = 123 */
 );
 ```
@@ -396,13 +396,13 @@ Restrict routes to specific HTTP methods. By default all routes can match both G
 use Joby\Smol\Request\Method;
 
 $router->add(
-    new ExactMatcher('login'),
+    new ExactMatcher('/login'),
     fn() => /* ... */,
     Method::POST
 );
 
 $router->add(
-    new PatternMatcher('users/:id'),
+    new PatternMatcher('/users/:id'),
     fn(int $id) => /* ... */,
     [Method::GET, Method::HEAD]
 );
@@ -417,14 +417,14 @@ use Joby\Smol\Router\Priority;
 
 // Checked first
 $router->add(
-    new ExactMatcher('special'),
+    new ExactMatcher('/special'),
     fn() => /* ... */,
     priority: Priority::HIGH
 );
 
 // Checked second (default)
 $router->add(
-    new PrefixMatcher('api/'),
+    new PrefixMatcher('/api/'),
     fn() => /* ... */,
     priority: Priority::NORMAL
 );
@@ -446,7 +446,7 @@ use Joby\Smol\Router\Priority;
 
 // Basic authentication guard
 $router->guard(
-    new PrefixMatcher('admin/'),
+    new PrefixMatcher('/admin/'),
     function (Request $request): bool|null {
         if (!isset($_SESSION['user'])) {
             return false; // Deny access (403)
@@ -457,7 +457,7 @@ $router->guard(
 
 // Role-based access control
 $router->guard(
-    new PrefixMatcher('admin/'),
+    new PrefixMatcher('/admin/'),
     function (): bool {
         return $_SESSION['role'] === 'admin'; // true = allow, false = deny
     },
@@ -466,7 +466,7 @@ $router->guard(
 
 // Guards support the same parameter injection as handlers
 $router->guard(
-    new PatternMatcher('users/:id/edit'),
+    new PatternMatcher('/users/:id/edit'),
     function (int $id, Request $request): bool|null {
         $currentUser = $_SESSION['user_id'] ?? null;
         if ($currentUser !== $id) {
@@ -490,14 +490,14 @@ By default guards run on all HTTP methods, but can be limited to specific method
 ```php
 // Only guard POST requests
 $router->guard(
-    new PrefixMatcher('api/'),
+    new PrefixMatcher('/api/'),
     fn() => checkCsrfToken() ? null : false,
     method: Method::POST
 );
 
 // Guard multiple methods
 $router->guard(
-    new PrefixMatcher('admin/'),
+    new PrefixMatcher('/admin/'),
     fn() => isAuthenticated() ? null : false,
     method: [Method::POST, Method::PUT, Method::DELETE]
 );
@@ -517,7 +517,7 @@ $router->guard(
 
 // Then check specific permissions
 $router->guard(
-    new PrefixMatcher('admin/'),
+    new PrefixMatcher('/admin/'),
     fn() => hasAdminRole() ? null : false,
     priority: Priority::NORMAL
 );
@@ -530,7 +530,7 @@ Modifiers alter responses after they're generated by route handlers. They run in
 ```php
 // Add CORS headers to all API responses
 $router->modify(
-    new PrefixMatcher('api/'),
+    new PrefixMatcher('/api/'),
     function (Response $response): Response {
         $response->headers->set('Access-Control-Allow-Origin', '*');
         return $response;
@@ -552,7 +552,7 @@ $router->modify(
 
 // Modifiers also receive matched parameters
 $router->modify(
-    new PatternMatcher('api/:version'),
+    new PatternMatcher('/api/:version'),
     function (string $version, Response $response): Response {
         $response->headers->set('API-Version', $version);
         return $response;
@@ -599,7 +599,7 @@ By default modifiers run on all HTTP methods, but can be limited to specific met
 ```php
 // Only modify POST responses
 $router->modify(
-    new PrefixMatcher('api/'),
+    new PrefixMatcher('/api/'),
     fn(Response $response) => addCreatedTimestamp($response),
     method: Method::POST
 );
@@ -631,7 +631,7 @@ $router->typeHandler(DateTime::class, function (string $value): ?DateTime {
 });
 
 $router->add(
-    new PatternMatcher('events/:date'),
+    new PatternMatcher('/events/:date'),
     fn(DateTime $date) => /* $date is a DateTime object */
 );
 ```
@@ -683,14 +683,14 @@ $router->addErrorResponseBuilder(
         $response->headers->set('Content-Type', 'application/json');
         return $response;
     },
-    new PrefixMatcher('api/')
+    new PrefixMatcher('/api/')
 );
 
 // Admin section gets themed error pages
 $router->addErrorResponseBuilder(
     '403',
     fn(HttpException $exception) => renderAdminErrorPage($exception),
-    new PrefixMatcher('admin/')
+    new PrefixMatcher('/admin/')
 );
 
 // Everything else gets default error pages
@@ -712,7 +712,7 @@ $router->addErrorResponseBuilder(
             "API version {$version} endpoint not found"
         );
     },
-    new PatternMatcher('api/:version')
+    new PatternMatcher('/api/:version')
 );
 ```
 
@@ -748,7 +748,7 @@ $router->addErrorResponseBuilder(
 
 ## Route Normalization
 
-By default, routes are normalized to have no leading or trailing slashes, and the root path is represented as an empty string. You can add custom normalization that runs before the default normalization.
+The default normalizer enforces leading slashes, and does not strip trailing slashes. So /foo/bar is treated the same as foo/bar, but not as /foo/bar/. The root directory is considered a single slash.
 
 ```php
 // Convert to lowercase
