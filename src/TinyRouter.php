@@ -22,7 +22,7 @@ class TinyRouter
     /**
      * Array of routes, organized by priority. Each consists of a matcher, handler callback, and allowed methods. The handler may accept named/typed arguments, and they will be injected from the Matched instance created by the Matcher as needed. If the handler returns a Response, it will be used as the response for the request. If it returns null, matching attempts will continue to the next route.
      * 
-     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(mixed...): (Response|null), method: array<Method>}>> $routes
+     * @var array<int, array<array{matcher: MatcherInterface, handler: Closure(...mixed): (Response|null), method: array<Method>}>> $routes
      */
     protected array $routes = [
         Priority::HIGH->value   => [],
@@ -56,7 +56,7 @@ class TinyRouter
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      * 
      * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
      */
@@ -84,7 +84,7 @@ class TinyRouter
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      * 
      * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
      */
@@ -112,7 +112,7 @@ class TinyRouter
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      * 
      * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
      */
@@ -140,7 +140,7 @@ class TinyRouter
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      * 
      * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
      */
@@ -168,7 +168,7 @@ class TinyRouter
      * 
      * General-purpose parameters are matched by name, and typed using the type handlers registered with the router. If a parameter cannot be provided, and does not have a default value or allow null, an InvalidParameterException will be thrown when the handler is invoked, and an error page will be returned to the client.
      * 
-     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      * 
      * @codeCoverageIgnore this just passes through to add(), so it's not worth testing separately
      */
@@ -199,7 +199,7 @@ class TinyRouter
      * Return a Response to send to the client.
      * 
      * @param Method|array<Method> $method optionally limit the route to specific HTTP methods, or null to apply to all
-     * @param (callable(mixed...): (Response|null))|(Closure(mixed...): (Response|null)) $handler
+     * @param (callable(...mixed): (Response|null))|(Closure(...mixed): (Response|null)) $handler
      */
     public function add(
         MatcherInterface $matcher,
@@ -336,7 +336,7 @@ class TinyRouter
     /** 
      * Runs the given handler with the provided match and returns a Response. Reflects closure and injects arguments from Matched as needed.
      * 
-     * @param Closure(mixed...): (Response|null) $handler
+     * @param Closure(...mixed): (Response|null) $handler
      */
     protected function runHandler(Closure $handler, MatchedRoute $match): Response|null
     {
