@@ -427,14 +427,18 @@ class TinyRouter
      * Return the given value cast to one of the provided types, if possible. If not possible, throws an InvalidParameterException.
      * @param array<string> $types
      */
-    protected function valueAsType(string|null $value, array $types): mixed
+    protected function valueAsType(mixed $value, array $types): mixed
     {
         // if value is null, return null
         if ($value === null)
             return null;
-        // if no types, return as is -- we can't validate, and will just have to trust downstream code to handle it
+        // if no types were provided, return as-is -- we can't validate, and will just have to trust downstream code to handle it
         if (!$types)
             return $value;
+        // if value is not a string, just return as-is and let PHP's type checking handle it
+        if (!is_string($value)) {
+            return $value;
+        }
         // otherwise we need to check each type, and return the first one that has a matching handler
         foreach ($types as $type) {
             if (array_key_exists($type, $this->typeHandlers)) {

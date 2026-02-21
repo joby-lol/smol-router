@@ -354,6 +354,8 @@ $router->add(
 
 Handler functions automatically receive parameters extracted by matchers, with type conversion. If a type cannot be created from the string form of the parameter an exception will be thrown, and the user will get a 400 error indicating that it was an invalid request.
 
+If you write your own Matchers, you can provide parameters in the `MatchedRoute` object in any type you like, and they will be injected to the handler by name.
+
 ```php
 // String parameters
 $router->add(

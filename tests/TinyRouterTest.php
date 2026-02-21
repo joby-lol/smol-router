@@ -27,6 +27,7 @@ use Joby\Smol\URL\Path;
 use Joby\Smol\URL\URL;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use stdClass;
 
 class TinyRouterTest extends TestCase
 {
@@ -470,6 +471,34 @@ class TinyRouterTest extends TestCase
         $normalized = $router->normalizeRoute('/about/');
 
         $this->assertEquals('ABOUT/', $normalized);
+    }
+
+    public function test_injects_mixed_parameters(): void
+    {
+        // custom matcher that returns a match with non-string parameters
+        $matcher =
+
+            new class implements MatcherInterface {
+
+            public function match(string $path, Request $request): MatchedRoute|null
+            {
+                return new MatchedRoute($path, $request, ['int_param' => 5, 'obj_param' => new stdClass()]);
+            }
+
+            };
+
+        $router = new TinyRouter();
+        $router->add(
+            $matcher,
+            fn(int $int_param, object $obj_param) => $this->createTextResponse($int_param . get_class($obj_param))
+        );
+
+        $request = $this->createRequest('/test');
+        $response = $router->run($request);
+
+        $this->assertEquals(200, $response->status->code);
+        $this->assertEquals('5stdClass', $response->content->content);
+
     }
 
     private function createRequest(string $path, Method $method = Method::GET): Request

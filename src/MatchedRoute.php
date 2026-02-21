@@ -16,7 +16,7 @@ class MatchedRoute
 
     /**
      * @param Request $request The request that was matched.
-     * @param array<string, string> $parameters The parameters extracted from the request, as they appear in the request (i.e. all strings).
+     * @param array<string, mixed> $parameters The parameters extracted from the request, if they are strings they may be converted later during injection
      */
     public function __construct(
         public readonly string $path,
@@ -35,7 +35,7 @@ class MatchedRoute
     /**
      * The value of a given parameter if it exists, otherwise null.
      */
-    public function parameter(string $name): string|null
+    public function parameter(string $name): mixed
     {
         return $this->parameters[$name] ?? null;
     }
