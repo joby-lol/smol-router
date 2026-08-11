@@ -25,8 +25,9 @@
     "phpstan/phpstan": "^2.1"
   },
   "require": {
-    "php": ">=8.1",
+    "php": ">=8.2",
     "joby/smol-request": "^1.0",
-    "joby/smol-response": "^1.0"
+    "joby/smol-response": "^1.0",
+    "joby/smol-cast": "^1.4"
   }
 }
