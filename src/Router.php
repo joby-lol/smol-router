@@ -67,8 +67,9 @@ class Router
     protected array $parameter_factories = [];
 
     /**
+     * @template CallableArgs of array<mixed>
      * @param string $pattern
-     * @param (callable(never...):(Response|RouteError|null))|(Closure(never...):(Response|RouteError|null))|null $handler
+     * @param (callable(CallableArgs...):(Response|RouteError|null))|(Closure(CallableArgs...):(Response|RouteError|null))|null $handler
      * @param Method|Method[] $method
      */
     public function __construct(
@@ -208,7 +209,8 @@ class Router
      * 
      * Guards are passed the complete original Request and may return null if they have no opinion about the permissions for a given route, or return boolean if they want to affirmatively say to either allow or deny access. The first highest priority guard to return a non-null value wins, and if no guards return a value access is granted by default.
      * 
-     * @param (callable(Request):(bool|null))|(Closure(never...):(bool|null))|array<int, (Closure(never...):(bool|null))|(callable(Request):(bool|null))> $guards
+     * @template CallableArgs of array<mixed>
+     * @param (callable(Request):(bool|null))|(Closure(CallableArgs...):(bool|null))|array<int, (Closure(CallableArgs...):(bool|null))|(callable(Request):(bool|null))> $guards
      */
     public function guard(
         callable|Closure|array $guards,
@@ -229,7 +231,8 @@ class Router
     }
 
     /**
-     * @param (callable(never...):(Response|RouteError|null))|(Closure(never...):(Response|RouteError|null))|null $handler
+     * @template CallableArgs of array<mixed>
+     * @param (callable(CallableArgs...):(Response|RouteError|null))|(Closure(CallableArgs...):(Response|RouteError|null))|null $handler
      */
     public function setHandler(callable|Closure|null $handler): static
     {
@@ -259,8 +262,9 @@ class Router
     }
 
     /**
+     * @template CallableArgs of array<mixed>
      * @template ReturnType
-     * @param callable(never...):ReturnType $callback
+     * @param callable(CallableArgs...):ReturnType $callback
      * @return ReturnType
      */
     protected function injectParametersAndExecute(callable $callback, RouteContext $context): mixed
