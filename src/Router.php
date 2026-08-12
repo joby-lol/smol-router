@@ -30,7 +30,7 @@ class Router
 
     /**
      * Callback to be used for generating a response if this Router matches the request exactly.
-     * @var (Closure():(Response|RouteError|null))|null
+     * @var (Closure(never...):(Response|RouteError|null))|null
      */
     protected Closure|null $handler;
 
@@ -42,7 +42,7 @@ class Router
 
     /**
      * Array of guards that will be required to match for routing to continue. The first one to return a bool will take priority (either in favor or against access).
-     * @var array<int, array<int, Closure(): (bool|null)>>
+     * @var array<int, array<int, Closure(never...): (bool|null)>>
      */
     protected array $guards = [
         Priority::HIGH->value   => [],
@@ -68,7 +68,7 @@ class Router
 
     /**
      * @param string $pattern
-     * @param (callable():(Response|RouteError|null))|(Closure():(Response|RouteError|null))|null $handler
+     * @param (callable(never...):(Response|RouteError|null))|(Closure(never...):(Response|RouteError|null))|null $handler
      * @param Method|Method[] $method
      */
     public function __construct(
@@ -208,7 +208,7 @@ class Router
      * 
      * Guards are passed the complete original Request and may return null if they have no opinion about the permissions for a given route, or return boolean if they want to affirmatively say to either allow or deny access. The first highest priority guard to return a non-null value wins, and if no guards return a value access is granted by default.
      * 
-     * @param (callable(Request):(bool|null))|(Closure():(bool|null))|array<int, (Closure():(bool|null))|(callable(Request):(bool|null))> $guards
+     * @param (callable(Request):(bool|null))|(Closure(never...):(bool|null))|array<int, (Closure(never...):(bool|null))|(callable(Request):(bool|null))> $guards
      */
     public function guard(
         callable|Closure|array $guards,
@@ -229,7 +229,7 @@ class Router
     }
 
     /**
-     * @param (callable():(Response|RouteError|null))|(Closure():(Response|RouteError|null))|null $handler
+     * @param (callable(never...):(Response|RouteError|null))|(Closure(never...):(Response|RouteError|null))|null $handler
      */
     public function setHandler(callable|Closure|null $handler): static
     {
@@ -260,7 +260,7 @@ class Router
 
     /**
      * @template ReturnType
-     * @param callable():ReturnType $callback
+     * @param callable(never...):ReturnType $callback
      * @return ReturnType
      */
     protected function injectParametersAndExecute(callable $callback, RouteContext $context): mixed
@@ -451,8 +451,8 @@ class Router
     /**
      * Normalize a single or array of guards to be an array of entirely Closures.
      * 
-     * @param (callable(Request):(bool|null))|(Closure():(bool|null))|array<int, (Closure():(bool|null))|(callable(Request):(bool|null))> $guards
-     * @return array<int,Closure():(bool|null)>
+     * @param (callable(Request):(bool|null))|(Closure(never...):(bool|null))|array<int, (Closure(never...):(bool|null))|(callable(Request):(bool|null))> $guards
+     * @return array<int,Closure(never...):(bool|null)>
      */
     protected function normalizeGuards(callable|Closure|array $guards): array
     {
