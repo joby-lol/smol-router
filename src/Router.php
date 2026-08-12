@@ -30,7 +30,7 @@ class Router
 
     /**
      * Callback to be used for generating a response if this Router matches the request exactly.
-     * @var (Closure(mixed...):(Response|RouteError|null))|null
+     * @var (Closure():(Response|RouteError|null))|null
      */
     protected Closure|null $handler;
 
@@ -68,7 +68,7 @@ class Router
 
     /**
      * @param string $pattern
-     * @param (callable(mixed...):(Response|RouteError|null))|(Closure(mixed...):(Response|RouteError|null))|null $handler
+     * @param (callable():(Response|RouteError|null))|(Closure():(Response|RouteError|null))|null $handler
      * @param Method|Method[] $method
      */
     public function __construct(
@@ -229,7 +229,7 @@ class Router
     }
 
     /**
-     * @param (callable(mixed...):(Response|RouteError|null))|(Closure(mixed...):(Response|RouteError|null))|null $handler
+     * @param (callable():(Response|RouteError|null))|(Closure():(Response|RouteError|null))|null $handler
      */
     public function setHandler(callable|Closure|null $handler): static
     {
@@ -260,7 +260,7 @@ class Router
 
     /**
      * @template ReturnType
-     * @param callable(mixed...):ReturnType $callback
+     * @param callable():ReturnType $callback
      * @return ReturnType
      */
     protected function injectParametersAndExecute(callable $callback, RouteContext $context): mixed
