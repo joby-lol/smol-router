@@ -9,6 +9,9 @@
 
 namespace Joby\Smol\Router;
 
+/**
+ * @internal class that converts a pattern like 'articles/:article_id/' in a regular expression internally, and then matches that pattern against the remaining path property of RouteContext objects. If the remaining path of the input matches, a new RouteContext is built with additional parameters for any matched patterns and the remaining path trimmed to no longer contain what this pattern matched.
+ */
 class PatternMatcher
 {
 
@@ -18,7 +21,7 @@ class PatternMatcher
     protected array $parameter_names;
 
     public function __construct(
-        string $pattern,
+        protected string $pattern,
     )
     {
         $this->parameter_names = [];
@@ -40,7 +43,10 @@ class PatternMatcher
             . '#';
     }
 
-    public function match(RouteContext $context): RouteContext|null
+    /**
+     * matches that pattern against the remaining path property of RouteContext objects. If the remaining path of the input matches, a new RouteContext is built with additional parameters for any matched patterns and the remaining path trimmed to no longer contain what this pattern matched. Returns null if the given RouteContext does not match this pattern.
+     */
+    public function match(RouteContext $context, Router $current_router): RouteContext|null
     {
         // attempt regex match
         if (!preg_match($this->regex, $context->remaining_path, $matches)) {
@@ -58,7 +64,7 @@ class PatternMatcher
         return $context->with(
             $new_remaining_path,
             $parameters,
-            $context->router,
+            $current_router,
         );
     }
 

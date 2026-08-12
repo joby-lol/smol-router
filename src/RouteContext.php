@@ -15,6 +15,8 @@ use Joby\Smol\Request\Request;
 
 /**
  * @internal class for tracking state as a Request is passed from a Router to its children.
+ * 
+ * At each layer of nested Router processing a fresh copy is spawned, and they are used to track the current request, remaining unmatched path string, pattern-matched parameter values, parent Router, and previous RouteContext.
  */
 readonly class RouteContext
 {

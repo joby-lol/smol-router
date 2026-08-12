@@ -101,7 +101,7 @@ class Router
             return new RouteError(405, $incoming_context, 'Method not allowed');
         // check if we match this context
         // if we don't that's a hard short circuit, this request isn't for us or any children
-        $context = $this->pattern->match($incoming_context);
+        $context = $this->pattern->match($incoming_context, $this);
         if (!$context)
             return new RouteError(404, $incoming_context, 'Not found');
         // this is where we start trying to accumulate the first soft error we see
@@ -190,6 +190,20 @@ class Router
     }
 
     /**
+     * Add one or more Routers to be matched against the remaining path after this router runs, effectively making them route on subdirectories/suffixes of this Router's pattern.
+     * 
+     * @param Router|Router[] $routers
+     */
+    public function addRouter(Router|array $routers, Priority $priority = Priority::NORMAL): static
+    {
+        $this->routers[$priority->value] = array_merge(
+            $this->routers[$priority->value],
+            is_array($routers) ? array_values($routers) : [$routers]
+        );
+        return $this;
+    }
+
+    /**
      * Add a permissions guard to this Router. It will be run before any handler callbacks to determine whether access should be granted.
      * 
      * Guards are passed the complete original Request and may return null if they have no opinion about the permissions for a given route, or return boolean if they want to affirmatively say to either allow or deny access. The first highest priority guard to return a non-null value wins, and if no guards return a value access is granted by default.
@@ -245,17 +259,6 @@ class Router
     }
 
     /**
-     * Check whether there are any child routers defined.
-     */
-    public function hasChildRouters(): bool
-    {
-        foreach ($this->routers as $rs)
-            if ($rs)
-                return true;
-        return false;
-    }
-
-    /**
      * @template ReturnType
      * @param callable(mixed...):ReturnType $callback
      * @return ReturnType
@@ -277,8 +280,8 @@ class Router
                 $args[$parameter->name] = $context->remaining_path;
                 continue;
             }
-            // reserved name $parameters will always be $context->parameters
-            if ($parameter->name === 'parameters') {
+            // reserved name $all_parameters will always be $context->parameters
+            if ($parameter->name === 'all_parameters') {
                 $args[$parameter->name] = $context->parameters;
                 continue;
             }
@@ -306,6 +309,7 @@ class Router
             }
             // value exists and has a type hint
             $type_strings = $this->getTypeStrings($type);
+            $type_strings = $this->sortTypeStrings($type_strings);
             foreach ($type_strings as $type_string) {
                 // string is easy, assign and break immediately
                 if ($type_string === 'string') {
@@ -340,7 +344,7 @@ class Router
                     continue;
                 }
                 // try to cast as object
-                if (class_exists($type_string)) {
+                if (class_exists($type_string, true)) {
                     $value = $this->buildArgumentObject($type_string, $string_value, $context);
                     if ($value !== null) {
                         $args[$parameter->name] = $value;
@@ -349,10 +353,8 @@ class Router
                     continue;
                 }
             }
-            // if we got here we didn't successfully cast it to anything
-            if ($type->allowsNull())
-                $args[$parameter->name] = null;
-            else
+            // throw an exception if it's null and not allowed to be null
+            if ($args[$parameter->name] === null && !$type->allowsNull())
                 throw new ParametersInvalidFormatException(sprintf(
                     'Parameter %s could not be cast to %s',
                     $parameter->name,
@@ -360,7 +362,7 @@ class Router
                 ));
         }
         // execute with built args
-        return call_user_func($callback, ...$args);
+        return call_user_func_array($callback, $args);
     }
 
     protected function getReflection(Closure $closure): ReflectionFunction
@@ -399,10 +401,11 @@ class Router
 
     /**
      * Convert a reflection type into an array of strings
+     * 
      * @param ReflectionType|null $type
-     * @return string[]
+     * @return array<int,string>
      */
-    function getTypeStrings(ReflectionType|null $type): array
+    protected function getTypeStrings(ReflectionType|null $type): array
     {
         if ($type === null)
             return [];
@@ -410,14 +413,39 @@ class Router
             return [$type->getName()];
         if ($type instanceof ReflectionUnionType) {
             $names = [];
-            foreach ($type->getTypes() as $subType) {
-                $names = array_unique(
-                    array_merge($names, $this->getTypeStrings($subType)),
-                );
-            }
+            foreach ($type->getTypes() as $sub_type)
+                foreach ($this->getTypeStrings($sub_type) as $type_string)
+                    $names[] = $type_string;
             return $names;
         }
         return [];
+    }
+
+    /**
+     * Sort type strings to put primitives at the end, in the order float > int > bool > string
+     * 
+     * @param array<int,string> $types
+     * @return array<int,string>
+     */
+    protected function sortTypeStrings(array $types): array
+    {
+        if (in_array('float', $types)) {
+            $types = array_diff($types, ['float']);
+            $types[] = 'float';
+        }
+        if (in_array('int', $types)) {
+            $types = array_diff($types, ['int']);
+            $types[] = 'int';
+        }
+        if (in_array('bool', $types)) {
+            $types = array_diff($types, ['bool']);
+            $types[] = 'bool';
+        }
+        if (in_array('string', $types)) {
+            $types = array_diff($types, ['string']);
+            $types[] = 'string';
+        }
+        return $types;
     }
 
     /**

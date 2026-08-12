@@ -15,6 +15,11 @@ namespace Joby\Smol\Router;
 interface FromStringInterface
 {
 
+    /**
+     * Return a fully-valid instance of this object if one can be constructed from the given string value. Return null if the string is not valid.
+     * 
+     * This method must not throw any exceptions.
+     */
     public static function fromString(string $value): static|null;
 
 }

@@ -9,6 +9,9 @@
 
 namespace Joby\Smol\Router;
 
+/**
+ * Tiers for controlling the priority of callbacks in Routers.
+ */
 enum Priority: int
 {
 
