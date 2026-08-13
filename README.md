@@ -88,13 +88,15 @@ $root->addRouter($users);
 
 ## Parameter Injection & Autowiring
 
-Handlers and guards support automatic argument resolution by parameter name and type.
+Handlers, middleware, and guards support automatic argument resolution by parameter name and type.
 
 ### Reserved Parameters
 
 * `$request` (`Joby\Smol\Request\Request`): The original request object.
+* `$context` (`Joby\Smol\Router\RouteContext`): The current routing context.
 * `$remaining_path` (`string`): Path remaining after current node matching.
 * `$all_parameters` (`array<string,string>`): Raw string map of all matched pattern parameters in their raw string form.
+* `$next` (`Callable():Response|RouteError`): middleware only: the next middleware layer.
 
 ### Primitive casting and union types
 
@@ -164,6 +166,39 @@ $router->guard(
 * `true`: Access granted. Short-circuits remaining guards on this node.
 * `false`: Access denied. Immediately returns a hard `403 RouteError`.
 * `null`: Abstains. Continues evaluating remaining guards.
+
+## Middleware
+
+Middleware wraps route execution in an onion architecture—executing pre-processing logic before downstream guards, handlers, and child routers run, and post-processing logic on the returned result.
+
+Middleware arguments are injected automatically, so their order doesn't matter and they can request pattern-matched data from the URL and specific formats as described in the parameter injection section.
+
+```php
+use Closure;
+use Joby\Smol\Response\Response;
+use Joby\Smol\Router\RouteContext;
+use Joby\Smol\Router\Priority;
+
+$router->addMiddleware(
+    function (Closure $next, RouteContext $context) {
+        // 1. Pre-processing
+        $context->request->headers->set('X-Start-Time', (string) microtime(true));
+
+        // 2. Pass control downstream
+        $responseOrError = $next();
+
+        // 3. Post-processing
+        if ($responseOrError instanceof Response) {
+            $responseOrError->headers->set('X-Powered-By', 'smolRouter');
+        }
+
+        return $responseOrError;
+    }, 
+    priority: Priority::HIGH
+);
+```
+
+There is also an `AbstractMiddleware` class that eliminates a lot of boilerplate and allows easy and predictable middleware design.
 
 ## Requirements
 

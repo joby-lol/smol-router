@@ -738,9 +738,243 @@ class RouterTest extends TestCase
         $this->assertSame('Unexpected failure during handling', $result->exception->getMessage());
     }
 
+    // --- Middleware & Execution Order ---
+
+    public function test_middleware_executes_around_handler(): void
+    {
+        $log = [];
+
+        $router = new Router(
+            pattern: 'test/',
+            handler: function () use (&$log) {
+                $log[] = 'handler';
+                return $this->createMockResponse();
+            },
+        );
+
+        $router->addMiddleware(function (\Closure $next) use (&$log) {
+            $log[] = 'middleware_before';
+            $response = $next();
+            $log[] = 'middleware_after';
+            return $response;
+        });
+
+        $request = $this->createRealRequest('/test/');
+        $result = $router->run($request);
+
+        $this->assertInstanceOf(Response::class, $result);
+        $this->assertSame(['middleware_before', 'handler', 'middleware_after'], $log);
+    }
+
+    public function test_middleware_executes_in_strict_priority_order(): void
+    {
+        $executionOrder = [];
+
+        $router = new Router(
+            pattern: 'test/',
+            handler: fn() => $this->createMockResponse(),
+        );
+
+        $router->addMiddleware(function (\Closure $next) use (&$executionOrder) {
+            $executionOrder[] = 'low_before';
+            $response = $next();
+            $executionOrder[] = 'low_after';
+            return $response;
+        }, Priority::LOW);
+
+        $router->addMiddleware(function (\Closure $next) use (&$executionOrder) {
+            $executionOrder[] = 'high_before';
+            $response = $next();
+            $executionOrder[] = 'high_after';
+            return $response;
+        }, Priority::HIGH);
+
+        $router->addMiddleware(function (\Closure $next) use (&$executionOrder) {
+            $executionOrder[] = 'normal_before';
+            $response = $next();
+            $executionOrder[] = 'normal_after';
+            return $response;
+        }, Priority::NORMAL);
+
+        $request = $this->createRealRequest('/test/');
+        $router->run($request);
+
+        $expected = [
+            'high_before',
+            'normal_before',
+            'low_before',
+            'low_after',
+            'normal_after',
+            'high_after',
+        ];
+
+        $this->assertSame($expected, $executionOrder);
+    }
+
+    public function test_middleware_can_short_circuit_execution(): void
+    {
+        $handlerExecuted = false;
+
+        $router = new Router(
+            pattern: 'blocked/',
+            handler: function () use (&$handlerExecuted) {
+                $handlerExecuted = true;
+                return $this->createMockResponse();
+            },
+        );
+
+        // Middleware returns a hard RouteError without invoking $next()
+        $router->addMiddleware(function (RouteContext $context) {
+            return new RouteError(401, $context, 'Unauthorized from middleware');
+        });
+
+        $request = $this->createRealRequest('/blocked/');
+        $result = $router->run($request);
+
+        $this->assertInstanceOf(RouteError::class, $result);
+        $this->assertSame(401, $result->http_code);
+        $this->assertSame('Unauthorized from middleware', $result->message);
+        $this->assertFalse($handlerExecuted);
+    }
+
+    public function test_middleware_receives_injected_parameters(): void
+    {
+        $capturedUserId = null;
+        $capturedRequest = null;
+
+        $router = new Router(
+            pattern: 'users/:user_id/',
+            handler: fn() => $this->createMockResponse(),
+        );
+
+        $router->addMiddleware(function (\Closure $next, int $user_id, Request $request) use (&$capturedUserId, &$capturedRequest) {
+            $capturedUserId = $user_id;
+            $capturedRequest = $request;
+            return $next();
+        });
+
+        $request = $this->createRealRequest('/users/555/');
+        $router->run($request);
+
+        $this->assertSame(555, $capturedUserId);
+        $this->assertSame($request, $capturedRequest);
+    }
+
+    public function test_parent_middleware_wraps_child_router_execution(): void
+    {
+        $log = [];
+
+        $rootRouter = new Router(pattern: 'api/');
+        $childRouter = new Router(
+            pattern: 'v1/',
+            handler: function () use (&$log) {
+                $log[] = 'child_handler';
+                return $this->createMockResponse();
+            },
+        );
+
+        $rootRouter->addMiddleware(function (\Closure $next) use (&$log) {
+            $log[] = 'parent_middleware_start';
+            $response = $next();
+            $log[] = 'parent_middleware_end';
+            return $response;
+        });
+
+        $childRouter->addMiddleware(function (\Closure $next) use (&$log) {
+            $log[] = 'child_middleware_start';
+            $response = $next();
+            $log[] = 'child_middleware_end';
+            return $response;
+        });
+
+        $rootRouter->addRouter($childRouter);
+
+        $request = $this->createRealRequest('/api/v1/');
+        $rootRouter->run($request);
+
+        $expected = [
+            'parent_middleware_start',
+            'child_middleware_start',
+            'child_handler',
+            'child_middleware_end',
+            'parent_middleware_end',
+        ];
+
+        $this->assertSame($expected, $log);
+    }
+
+    public function test_middleware_accepts_array_of_callables(): void
+    {
+        $log = [];
+
+        $m1 = function (\Closure $next) use (&$log) {
+            $log[] = 'm1';
+            return $next();
+        };
+
+        $m2 = function (\Closure $next) use (&$log) {
+            $log[] = 'm2';
+            return $next();
+        };
+
+        $router = new Router(
+            pattern: 'batch/',
+            handler: fn() => $this->createMockResponse(),
+        );
+
+        $router->addMiddleware([$m1, $m2]);
+
+        $request = $this->createRealRequest('/batch/');
+        $router->run($request);
+
+        $this->assertSame(['m1', 'm2'], $log);
+    }
+
+    public function test_middleware_unhandled_exception_converts_to_500_route_error(): void
+    {
+        $router = new Router(
+            pattern: 'crash/',
+            handler: fn() => $this->createMockResponse(),
+        );
+
+        $router->addMiddleware(function () {
+            throw new Exception('Middleware boom');
+        });
+
+        $request = $this->createRealRequest('/crash/');
+        $result = $router->run($request);
+
+        $this->assertInstanceOf(RouteError::class, $result);
+        $this->assertSame(500, $result->http_code);
+        $this->assertTrue($result->isHardFailure());
+        $this->assertSame('Unhandled exception in middleware', $result->message);
+        $this->assertSame('Middleware boom', $result->exception->getMessage());
+    }
+
+    public function test_middleware_missing_parameter_converts_to_500_route_error(): void
+    {
+        $router = new Router(
+            pattern: 'test/',
+            handler: fn() => $this->createMockResponse(),
+        );
+
+        // Parameter $non_existent_param cannot be resolved from path or factories
+        $router->addMiddleware(function (\Closure $next, string $non_existent_param) {
+            return $next();
+        });
+
+        $request = $this->createRealRequest('/test/');
+        $result = $router->run($request);
+
+        $this->assertInstanceOf(RouteError::class, $result);
+        $this->assertSame(500, $result->http_code);
+        $this->assertTrue($result->isHardFailure());
+        $this->assertSame('Middleware parameters not available', $result->message);
+        $this->assertInstanceOf(ParametersMissingException::class, $result->exception);
+    }
+
 }
 
-// Test stubs for Part 3
 class StubFromStringObject implements FromStringInterface
 {
 

@@ -41,6 +41,16 @@ class Router
     protected array $method;
 
     /**
+     * Array of middleware callbacks that will wrap execution from before guards to after rendering.
+     * @var array<int,array<Closure(never):(Response|RouteError)>>
+     */
+    protected array $middleware = [
+        Priority::HIGH->value   => [],
+        Priority::NORMAL->value => [],
+        Priority::LOW->value    => [],
+    ];
+
+    /**
      * Array of guards that will be required to match for routing to continue. The first one to return a bool will take priority (either in favor or against access).
      * @var array<int, array<int, Closure(never): (bool|null)>>
      */
@@ -104,6 +114,58 @@ class Router
         $context = $this->pattern->match($incoming_context, $this);
         if (!$context)
             return new RouteError(404, $incoming_context, 'Not found');
+        // build stack inside out around core
+        $core = fn(RouteContext $ctx) => $this->dispatchDownstream($ctx);
+        $pipeline = array_reduce(
+            array_reverse(array_merge(
+                $this->middleware[Priority::HIGH->value],
+                $this->middleware[Priority::NORMAL->value],
+                $this->middleware[Priority::LOW->value],
+            )),
+            /**
+             * @param Closure():Response|RouteError $next
+             * @param Closure(never):(Response|RouteError) $middleware
+             */
+            function (Closure $next, Closure $middleware) use ($context) {
+                return function () use ($middleware, $next, $context): Response|RouteError {
+                    return $this->injectParametersAndExecute($middleware, $context, $next);
+                };
+            },
+            fn() => $core($context)
+        );
+        // execute stack and capture potential injection/unhandled errors within middleware
+        try {
+            return $pipeline();
+        }
+        catch (ParametersMissingException $th) {
+            return new RouteError(500, $context, 'Middleware parameters not available', $th);
+        }
+        catch (Throwable $th) {
+            return new RouteError(500, $context, 'Unhandled exception in middleware', $th);
+        }
+    }
+
+    /**
+     * Add one or more middleware callbacks to this Router.
+     * 
+     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<int, (Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
+     */
+    public function addMiddleware(
+        callable|Closure|array $middleware,
+        Priority $priority = Priority::NORMAL,
+    ): static
+    {
+        array_push($this->middleware[$priority->value], ...$this->normalizeMiddleware($middleware));
+        return $this;
+    }
+
+    /**
+     * Internal core callback for being dispatched in the middle of the middleware onion stack.
+     * 
+     * @return Response|RouteError
+     */
+    protected function dispatchDownstream(RouteContext $context): Response|RouteError
+    {
         // this is where we start trying to accumulate the first soft error we see
         $first_soft_error = null;
         // check guards
@@ -261,15 +323,26 @@ class Router
     /**
      * @template ReturnType
      * @param callable(never):ReturnType $callback
+     * @param (Closure():(Response|RouteError))|null $next
      * @return ReturnType
      */
-    protected function injectParametersAndExecute(callable $callback, RouteContext $context): mixed
+    protected function injectParametersAndExecute(callable $callback, RouteContext $context, Closure|null $next = null): mixed
     {
         if (!($callback instanceof Closure))
             $callback = Closure::fromCallable($callback);
         $reflection = $this->getReflection($callback);
         $args = [];
         foreach ($reflection->getParameters() as $parameter) {
+            // reserved name $context will always be the RouteContext
+            if ($parameter->name === 'context') {
+                $args[$parameter->name] = $context;
+                continue;
+            }
+            // reserved name $next will always be the next middleware
+            if ($parameter->name === 'next') {
+                $args[$parameter->name] = $next;
+                continue;
+            }
             // reserved name $request will always be $context->request
             if ($parameter->name === 'request') {
                 $args[$parameter->name] = $context->request;
@@ -463,6 +536,23 @@ class Router
             $guards,
         );
         return array_values($guards);
+    }
+
+    /**
+     * Normalize a single or array of middleware to be an array of entirely Closures.
+     * 
+     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<int, (Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
+     * @return array<int,Closure(never):(Response|RouteError)>
+     */
+    protected function normalizeMiddleware(callable|Closure|array $middleware): array
+    {
+        $middleware = is_array($middleware) ? $middleware : [$middleware];
+        $middleware = array_map(
+            // @phpstan-ignore-next-line phpstan just can't suss out what's going on here I guess
+            fn(callable|Closure $m): Closure => $m instanceof Closure ? $m : Closure::fromCallable($m),
+            $middleware,
+        );
+        return array_values($middleware);
     }
 
 }
