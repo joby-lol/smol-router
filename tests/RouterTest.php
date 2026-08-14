@@ -9,6 +9,7 @@
 
 namespace Joby\Smol\Router;
 
+use Closure;
 use Exception;
 use Joby\Smol\Request\Cookies\Cookies;
 use Joby\Smol\Request\Headers\Headers;
@@ -971,6 +972,177 @@ class RouterTest extends TestCase
         $this->assertTrue($result->isHardFailure());
         $this->assertSame('Middleware parameters not available', $result->message);
         $this->assertInstanceOf(ParametersMissingException::class, $result->exception);
+    }
+
+    // --- AbstractMiddleware Integration Tests ---
+
+    public function test_abstract_middleware_process_request_short_circuits_handler(): void
+    {
+        $earlyResponse = $this->createMockResponse();
+        $handlerExecuted = false;
+
+        $middleware =
+
+            new class ($earlyResponse) extends AbstractMiddleware {
+
+            public function __construct(private Response $earlyResponse) {}
+
+            protected function processRequest(Request $request, RouteContext $context): Response|RouteError|null
+            {
+                return $this->earlyResponse;
+            }
+
+            };
+
+        $router = new Router(
+            pattern: 'test/',
+            handler: function () use (&$handlerExecuted) {
+                $handlerExecuted = true;
+                return $this->createMockResponse();
+            },
+        );
+        $router->addMiddleware($middleware);
+
+        $request = $this->createRealRequest('/test/');
+        $result = $router->run($request);
+
+        $this->assertFalse($handlerExecuted);
+        $this->assertSame($earlyResponse, $result);
+    }
+
+    public function test_abstract_middleware_process_response_modifies_handler_response(): void
+    {
+        $originalResponse = $this->createMockResponse();
+        $modifiedResponse = $this->createMockResponse();
+
+        $middleware =
+
+            new class ($modifiedResponse) extends AbstractMiddleware {
+
+            public function __construct(private Response $modifiedResponse) {}
+
+            protected function processResponse(Response $response, RouteContext $context): Response|RouteError
+            {
+                return $this->modifiedResponse;
+            }
+
+            };
+
+        $router = new Router(
+            pattern: 'test/',
+            handler: fn() => $originalResponse,
+        );
+        $router->addMiddleware($middleware);
+
+        $request = $this->createRealRequest('/test/');
+        $result = $router->run($request);
+
+        $this->assertSame($modifiedResponse, $result);
+    }
+
+    public function test_abstract_middleware_process_error_intercepts_route_error(): void
+    {
+        $recoveredResponse = $this->createMockResponse();
+
+        // Intercepts a 404 RouteError (e.g., unmatched route or null handler) and converts it to a Response
+        $middleware =
+
+            new class ($recoveredResponse) extends AbstractMiddleware {
+
+            public function __construct(private Response $recoveredResponse) {}
+
+            protected function processError(RouteError $error, RouteContext $context): Response|RouteError
+            {
+                return $this->recoveredResponse;
+            }
+
+            };
+
+        $router = new Router(
+            pattern: 'matched/',
+            handler: fn() => throw new Exception('test exception'),
+        );
+        $router->addMiddleware($middleware);
+
+        $request = $this->createRealRequest('/matched/');
+        $result = $router->run($request);
+
+        $this->assertSame($recoveredResponse, $result);
+    }
+
+    public function test_abstract_middleware_receives_autowired_path_parameters(): void
+    {
+        $capturedId = null;
+
+        $middleware =
+
+            new class ($capturedId) extends AbstractMiddleware {
+
+            public function __construct(public mixed &$capturedId) {}
+
+            protected function processRequest(Request $request, RouteContext $context): Response|RouteError|null
+            {
+                // AbstractMiddleware __invoke receives path parameters if declared,
+                // or they can be inspected via context/request state.
+                return null;
+            }
+
+            public function __invoke(
+            Request $request,
+            Closure $next,
+            RouteContext $context,
+            int $id = null,
+            ): Response|RouteError
+            {
+                $this->capturedId = $id;
+                return parent::__invoke($request, $next, $context);
+            }
+
+            };
+
+        $router = new Router(
+            pattern: 'item/:id/',
+            handler: fn() => $this->createMockResponse(),
+        );
+        $router->addMiddleware($middleware);
+
+        $request = $this->createRealRequest('/item/999/');
+        $router->run($request);
+
+        $this->assertSame(999, $capturedId);
+    }
+
+    public function test_abstract_middleware_process_error_intercepts_handler_null_soft_error(): void
+    {
+        $recoveredResponse = $this->createMockResponse();
+
+        // Intercepts the soft 404 produced when a matched route handler returns null
+        $middleware =
+
+            new class ($recoveredResponse) extends AbstractMiddleware {
+
+            public function __construct(private Response $recoveredResponse) {}
+
+            protected function processError(RouteError $error, RouteContext $context): Response|RouteError
+            {
+                if ($error->http_code === 404) {
+                    return $this->recoveredResponse;
+                }
+                return $error;
+            }
+
+            };
+
+        $router = new Router(
+            pattern: 'maybe/',
+            handler: fn() => null, // Matched, but handler declines
+        );
+        $router->addMiddleware($middleware);
+
+        $request = $this->createRealRequest('/maybe/');
+        $result = $router->run($request);
+
+        $this->assertSame($recoveredResponse, $result);
     }
 
 }
