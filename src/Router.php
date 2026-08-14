@@ -148,7 +148,7 @@ class Router
     /**
      * Add one or more middleware callbacks to this Router.
      * 
-     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<int, (Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
+     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<(Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
      */
     public function addMiddleware(
         callable|Closure|array $middleware,
@@ -541,7 +541,7 @@ class Router
     /**
      * Normalize a single or array of middleware to be an array of entirely Closures.
      * 
-     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<int, (Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
+     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<(Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
      * @return array<int,Closure(never):(Response|RouteError)>
      */
     protected function normalizeMiddleware(callable|Closure|array $middleware): array
