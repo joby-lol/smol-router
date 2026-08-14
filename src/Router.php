@@ -30,7 +30,7 @@ class Router
 
     /**
      * Callback to be used for generating a response if this Router matches the request exactly.
-     * @var (Closure(never...):(Response|RouteError|null))|null
+     * @var (Closure(never):(Response|RouteError|null))|null
      */
     protected Closure|null $handler;
 
@@ -42,7 +42,7 @@ class Router
 
     /**
      * Array of middleware callbacks that will wrap execution from before guards to after rendering.
-     * @var array<int,array<Closure(never...):(Response|RouteError)>>
+     * @var array<int,array<Closure(never):(Response|RouteError)>>
      */
     protected array $middleware = [
         Priority::HIGH->value   => [],
@@ -52,7 +52,7 @@ class Router
 
     /**
      * Array of guards that will be required to match for routing to continue. The first one to return a bool will take priority (either in favor or against access).
-     * @var array<int, array<int, Closure(never...): (bool|null)>>
+     * @var array<int, array<int, Closure(never): (bool|null)>>
      */
     protected array $guards = [
         Priority::HIGH->value   => [],
@@ -77,8 +77,20 @@ class Router
     protected array $parameter_factories = [];
 
     /**
+     * Construct a router that will match the given pattern and optionally add a handler that will be used by this exact route. Its parameters will be auto-injected, and it must return a Response, RouteError, or null (which is roughly equivalent to a 404 error). You can also specify the HTTP methods that are allowed to match this route (as well as its sub-routes).
+     * 
+     * The following parameters are reserved for injection:
+     * 
+     * - `$next` (`Callable():Response|RouteError`): middleware only: the next middleware layer.
+     * - `$request` (`Joby\Smol\Request\Request`): The original request object.
+     * - `$context` (`Joby\Smol\Router\RouteContext`): The current routing context.
+     * - `$remaining_path` (`string`): Path remaining after current node matching.
+     * - `$all_parameters` (`array<string,string>`): Raw string map of all matched pattern parameters in their raw string form.
+     * 
+     * You can also include any matched parameters that have been generated so far, and they will be typed and injected.
+     * 
      * @param string $pattern
-     * @param (callable(never...):(Response|RouteError|null))|(Closure(never...):(Response|RouteError|null))|null $handler
+     * @param callable|Closure|null $handler
      * @param Method|Method[] $method
      */
     public function __construct(
@@ -124,7 +136,7 @@ class Router
             )),
             /**
              * @param Closure():Response|RouteError $next
-             * @param Closure(never...):(Response|RouteError) $middleware
+             * @param Closure(never):(Response|RouteError) $middleware
              */
             function (Closure $next, Closure $middleware) use ($context) {
                 return function () use ($middleware, $next, $context): Response|RouteError {
@@ -146,16 +158,27 @@ class Router
     }
 
     /**
-     * Add one or more middleware callbacks to this Router.
+     * Add one or more middleware callbacks to this Router. Callables will have their parameters auto-injected, but must return a Response or RouteError object. Alternatively, the AbstractMiddleware class is a very user-friendly way of building middleware. The following parameters can be used:
      * 
-     * @param (callable(never...):(Response|RouteError))|(Closure(never...):(Response|RouteError))|array<(Closure(never...):(Response|RouteError))|(callable(never...):(Response|RouteError))> $middleware
+     * - `$next` (`Callable():Response|RouteError`): middleware only: the next middleware layer.
+     * - `$request` (`Joby\Smol\Request\Request`): The original request object.
+     * - `$context` (`Joby\Smol\Router\RouteContext`): The current routing context.
+     * - `$remaining_path` (`string`): Path remaining after current node matching.
+     * - `$all_parameters` (`array<string,string>`): Raw string map of all matched pattern parameters in their raw string form.
+     * 
+     * You can also include any matched parameters that have been generated so far, and they will be injected the same as for a handler.
+     * 
+     * @param callable|Closure|array<Closure|callable> $middleware
      */
     public function addMiddleware(
         callable|Closure|array $middleware,
         Priority $priority = Priority::NORMAL,
     ): static
     {
-        array_push($this->middleware[$priority->value], ...$this->normalizeMiddleware($middleware));
+        array_push(
+            $this->middleware[$priority->value],
+            ...$this->normalizeMiddleware($middleware),
+        );
         return $this;
     }
 
@@ -270,7 +293,7 @@ class Router
      * 
      * Guards are passed the complete original Request and may return null if they have no opinion about the permissions for a given route, or return boolean if they want to affirmatively say to either allow or deny access. The first highest priority guard to return a non-null value wins, and if no guards return a value access is granted by default.
      * 
-     * @param (callable(Request):(bool|null))|(Closure(never...):(bool|null))|array<int, (Closure(never...):(bool|null))|(callable(Request):(bool|null))> $guards
+     * @param (callable(Request):(bool|null))|(Closure(never):(bool|null))|array<int, (Closure(never):(bool|null))|(callable(Request):(bool|null))> $guards
      */
     public function addGuard(
         callable|Closure|array $guards,
@@ -291,7 +314,19 @@ class Router
     }
 
     /**
-     * @param (callable(never...):(Response|RouteError|null))|(Closure(never...):(Response|RouteError|null))|null $handler
+     * Set the handler that will be used by this route. Its parameters will be auto-injected, and it must return a Response, RouteError, or null (which is roughly equivalent to a 404 error)
+     * 
+     * The following parameters are reserved for injection:
+     * 
+     * - `$next` (`Callable():Response|RouteError`): middleware only: the next middleware layer.
+    * - `$request` (`Joby\Smol\Request\Request`): The original request object.
+    * - `$context` (`Joby\Smol\Router\RouteContext`): The current routing context.
+    * - `$remaining_path` (`string`): Path remaining after current node matching.
+    * - `$all_parameters` (`array<string,string>`): Raw string map of all matched pattern parameters in their raw string form.
+    * 
+    * You can also include any matched parameters that have been generated so far, and they will be typed and injected.
+
+     * @param callable|Closure|null $handler
      */
     public function setHandler(callable|Closure|null $handler): static
     {
@@ -322,7 +357,7 @@ class Router
 
     /**
      * @template ReturnType
-     * @param callable(never...):ReturnType $callback
+     * @param callable(never):ReturnType $callback
      * @param (Closure():(Response|RouteError))|null $next
      * @return ReturnType
      */
@@ -524,8 +559,8 @@ class Router
     /**
      * Normalize a single or array of guards to be an array of entirely Closures.
      * 
-     * @param (callable(Request):(bool|null))|(Closure(never...):(bool|null))|array<int, (Closure(never...):(bool|null))|(callable(Request):(bool|null))> $guards
-     * @return array<int,Closure(never...):(bool|null)>
+     * @param (callable(Request):(bool|null))|(Closure(never):(bool|null))|array<int, (Closure(never):(bool|null))|(callable(Request):(bool|null))> $guards
+     * @return array<int,Closure(never):(bool|null)>
      */
     protected function normalizeGuards(callable|Closure|array $guards): array
     {
@@ -541,8 +576,8 @@ class Router
     /**
      * Normalize a single or array of middleware to be an array of entirely Closures.
      * 
-     * @param (callable(never...):(Response|RouteError))|(Closure(never...):(Response|RouteError))|array<(Closure(never...):(Response|RouteError))|(callable(never...):(Response|RouteError))> $middleware
-     * @return array<int,Closure(never...):(Response|RouteError)>
+     * @param (callable(never):(Response|RouteError))|(Closure(never):(Response|RouteError))|array<(Closure(never):(Response|RouteError))|(callable(never):(Response|RouteError))> $middleware
+     * @return array<int,Closure(never):(Response|RouteError)>
      */
     protected function normalizeMiddleware(callable|Closure|array $middleware): array
     {
