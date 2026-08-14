@@ -146,7 +146,7 @@ class RouterTest extends TestCase
             pattern: 'protected/',
             handler: fn() => $this->createMockResponse(),
         );
-        $router->guard(fn() => false);
+        $router->addGuard(fn() => false);
 
         $request = $this->createRealRequest('/protected/');
         $result = $router->run($request);
@@ -167,10 +167,10 @@ class RouterTest extends TestCase
         );
 
         // High priority guard grants access immediately
-        $router->guard(fn() => true, Priority::HIGH);
+        $router->addGuard(fn() => true, Priority::HIGH);
 
         // Normal priority guard that should never run
-        $router->guard(function () use (&$executedLowerPriorityGuard) {
+        $router->addGuard(function () use (&$executedLowerPriorityGuard) {
             $executedLowerPriorityGuard = true;
             return false;
         }, Priority::NORMAL);
@@ -191,8 +191,8 @@ class RouterTest extends TestCase
             handler: fn() => $this->createMockResponse(),
         );
 
-        $router->guard(fn() => null, Priority::HIGH);
-        $router->guard(function () use (&$secondGuardExecuted) {
+        $router->addGuard(fn() => null, Priority::HIGH);
+        $router->addGuard(function () use (&$secondGuardExecuted) {
             $secondGuardExecuted = true;
             return true;
         }, Priority::NORMAL);
@@ -213,17 +213,17 @@ class RouterTest extends TestCase
             handler: fn() => $this->createMockResponse(),
         );
 
-        $router->guard(function () use (&$executionOrder) {
+        $router->addGuard(function () use (&$executionOrder) {
             $executionOrder[] = 'low';
             return null;
         }, Priority::LOW);
 
-        $router->guard(function () use (&$executionOrder) {
+        $router->addGuard(function () use (&$executionOrder) {
             $executionOrder[] = 'high';
             return null;
         }, Priority::HIGH);
 
-        $router->guard(function () use (&$executionOrder) {
+        $router->addGuard(function () use (&$executionOrder) {
             $executionOrder[] = 'normal';
             return null;
         }, Priority::NORMAL);
@@ -240,7 +240,7 @@ class RouterTest extends TestCase
             pattern: 'protected/',
             handler: fn() => $this->createMockResponse(),
         );
-        $router->guard(function () {
+        $router->addGuard(function () {
             throw new Exception('Auth service down');
         });
 
@@ -476,7 +476,7 @@ class RouterTest extends TestCase
             pattern: 'feature/',
             handler: fn() => $this->createMockResponse(),
         );
-        $child1->guard(fn() => false);
+        $child1->addGuard(fn() => false);
 
         // Child 2 should never execute
         $child2 = new Router(
@@ -689,7 +689,7 @@ class RouterTest extends TestCase
             pattern: 'check/',
             handler: fn() => $this->createMockResponse(),
         );
-        $router->guard(function () {
+        $router->addGuard(function () {
             throw new ParametersInvalidFormatException('Format invalid in guard');
         });
 
@@ -705,7 +705,7 @@ class RouterTest extends TestCase
             pattern: 'check/',
             handler: fn() => $this->createMockResponse(),
         );
-        $router->guard(function () {
+        $router->addGuard(function () {
             throw new ParametersMissingException('Missing param in guard');
         });
 

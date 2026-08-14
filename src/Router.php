@@ -272,7 +272,7 @@ class Router
      * 
      * @param (callable(Request):(bool|null))|(Closure(never):(bool|null))|array<int, (Closure(never):(bool|null))|(callable(Request):(bool|null))> $guards
      */
-    public function guard(
+    public function addGuard(
         callable|Closure|array $guards,
         Priority $priority = Priority::NORMAL,
     ): static
